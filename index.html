@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>File2Video — Encode Files to H.264 Video</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+--bg:#0b0e14;--card:#131720;--card2:#1a1f2e;--border:#252d3a;
+--text:#d4dce8;--text2:#7a8599;--accent:#4da6ff;--accent2:#2563eb;
+--success:#34d399;--danger:#f87171;--warning:#fbbf24;
+--radius:12px;--font:'Segoe UI',system-ui,-apple-system,sans-serif;
+}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:var(--font);line-height:1.5}
+a{color:var(--accent);text-decoration:none}
+.wrap{max-width:780px;margin:0 auto;padding:24px 20px 60px}
+.header{text-align:center;padding:40px 0 32px}
+.header h1{font-size:28px;font-weight:700;letter-spacing:-0.5px;background:linear-gradient(135deg,var(--accent),var(--success));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header p{color:var(--text2);font-size:14px;margin-top:8px;max-width:500px;margin-left:auto;margin-right:auto}
+.tabs{display:flex;gap:4px;background:var(--card);border-radius:var(--radius);padding:4px;margin-bottom:24px}
+.tab{flex:1;padding:12px;text-align:center;border-radius:8px;cursor:pointer;font-weight:600;font-size:14px;color:var(--text2);transition:all .2s;border:none;background:none}
+.tab.active{background:var(--accent2);color:#fff}
+.tab:hover:not(.active){color:var(--text);background:var(--card2)}
+.section{display:none}
+.section.active{display:block}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:24px;margin-bottom:16px}
+.drop-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:48px 24px;text-align:center;cursor:pointer;transition:all .25s}
+.drop-zone:hover,.drop-zone.drag{border-color:var(--accent);background:rgba(77,166,255,.06)}
+.drop-zone .icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.drop-zone .label{font-size:15px;font-weight:600;color:var(--text)}
+.drop-zone .sub{font-size:13px;color:var(--text2);margin-top:4px}
+.file-info{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--card2);border-radius:8px;margin-top:16px}
+.file-info .fi-icon{width:40px;height:40px;border-radius:8px;background:var(--accent2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.file-info .fi-details{flex:1;min-width:0}
+.file-info .fi-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-info .fi-size{font-size:12px;color:var(--text2)}
+.file-info .fi-remove{width:32px;height:32px;border:none;background:none;color:var(--text2);cursor:pointer;font-size:18px;border-radius:6px;display:flex;align-items:center;justify-content:center}
+.file-info .fi-remove:hover{background:rgba(248,113,113,.15);color:var(--danger)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:14px 28px;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer;transition:all .2s;width:100%}
+.btn-primary{background:var(--accent2);color:#fff}
+.btn-primary:hover:not(:disabled){background:#3b82f6}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-success{background:#059669;color:#fff}
+.btn-success:hover{background:#047857}
+.progress-wrap{margin-top:16px;display:none}
+.progress-wrap.show{display:block}
+.progress-bar-bg{height:8px;background:var(--card2);border-radius:4px;overflow:hidden}
+.progress-bar{height:100%;background:linear-gradient(90deg,var(--accent2),var(--accent));border-radius:4px;width:0%;transition:width .3s}
+.progress-text{display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--text2)}
+.status{margin-top:16px;padding:14px 16px;border-radius:8px;font-size:13px;display:none;align-items:flex-start;gap:10px;line-height:1.5}
+.status.show{display:flex}
+.status.info{background:rgba(77,166,255,.1);border:1px solid rgba(77,166,255,.2);color:var(--accent)}
+.status.ok{background:rgba(52,211,153,.1);border:1px solid rgba(52,211,153,.2);color:var(--success)}
+.status.err{background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.2);color:var(--danger)}
+.status.warn{background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.2);color:var(--warning)}
+.status .s-icon{font-size:16px;flex-shrink:0;margin-top:1px}
+.dl-area{margin-top:16px;display:none}
+.dl-area.show{display:block}
+.hash-box{margin-top:12px;padding:12px;background:var(--card2);border-radius:8px;font-family:'Courier New',monospace;font-size:11px;word-break:break-all;color:var(--text2)}
+.hash-label{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
+.verify-result{margin-top:12px;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;display:none}
+.verify-result.show{display:block}
+.verify-result.pass{background:rgba(52,211,153,.12);color:var(--success);border:1px solid rgba(52,211,153,.2)}
+.verify-result.fail{background:rgba(248,113,113,.12);color:var(--danger);border:1px solid rgba(248,113,113,.2)}
+.specs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
+.spec{padding:10px 12px;background:var(--card2);border-radius:8px;font-size:12px}
+.spec .spec-label{color:var(--text2);font-size:11px}
+.spec .spec-value{font-weight:600;margin-top:2px}
+.info-section{margin-top:32px}
+.info-section h3{font-size:16px;font-weight:600;margin-bottom:12px}
+.info-section .step{display:flex;gap:12px;margin-bottom:12px}
+.info-section .step-num{width:28px;height:28px;border-radius:50%;background:var(--accent2);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.info-section .step-text{font-size:14px;color:var(--text2);padding-top:3px}
+.footer{text-align:center;padding:32px 0 16px;color:var(--text2);font-size:12px}
+.compat-warn{padding:20px;background:rgba(248,113,113,.1);border:1px solid rgba(248,113,113,.25);border-radius:var(--radius);color:var(--danger);text-align:center;margin-bottom:24px;font-size:14px}
+.compat-warn strong{display:block;font-size:16px;margin-bottom:4px}
+@media(max-width:600px){
+.wrap{padding:16px 12px 40px}
+.header{padding:24px 0 20px}
+.header h1{font-size:22px}
+.card{padding:16px}
+.drop-zone{padding:32px 16px}
+.specs{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="header">
+<h1>File2Video Encoder</h1>
+<p>Encode any file into a real H.264 video. Upload to YouTube, download back, and extract the original file without damage.</p>
+</div>
+
+<div id="compatWarn" class="compat-warn" style="display:none">
+<strong>Browser Not Supported</strong>
+<span>This tool requires WebCodecs API (Chrome 94+, Edge 94+, Opera 80+). Please use a Chromium-based browser.</span>
+</div>
+
+<div class="tabs">
+<div class="tab active" data-tab="encode">Encode File</div>
+<div class="tab" data-tab="decode">Decode Video</div>
+</div>
+
+<!-- ENCODE -->
+<div id="encodeSection" class="section active">
+<div class="card">
+<div id="encDropZone" class="drop-zone">
+<div class="icon">&#128196;</div>
+<div class="label">Drop file here or click to select</div>
+<div class="sub">Any file type, up to 50 MB recommended</div>
+</div>
+<input type="file" id="encFileInput" style="display:none">
+<div id="encFileInfo" class="file-info" style="display:none">
+<div class="fi-icon">&#128196;</div>
+<div class="fi-details">
+<div id="encFileName" class="fi-name"></div>
+<div id="encFileSize" class="fi-size"></div>
+</div>
+<button id="encRemoveBtn" class="fi-remove" title="Remove">&times;</button>
+</div>
+</div>
+
+<button id="encodeBtn" class="btn btn-primary" disabled>Encode to H.264 Video</button>
+
+<div id="encProgress" class="progress-wrap">
+<div class="progress-bar-bg"><div id="encBar" class="progress-bar"></div></div>
+<div class="progress-text"><span id="encPercent">0%</span><span id="encStatus">Preparing...</span></div>
+</div>
+
+<div id="encStatusMsg" class="status"></div>
+
+<div id="encSpecs" class="specs" style="display:none">
+<div class="spec"><div class="spec-label">Resolution</div><div class="spec-value">1280 x 720</div></div>
+<div class="spec"><div class="spec-label">Codec</div><div class="spec-value">H.264 (AVC)</div></div>
+<div class="spec"><div class="spec-label">Block Size</div><div id="specBlocks" class="spec-value">16x16 px</div></div>
+<div class="spec"><div class="spec-label">Frames</div><div id="specFrames" class="spec-value">—</div></div>
+<div class="spec"><div class="spec-label">Data Rate</div><div class="spec-value">900 bytes/frame</div></div>
+<div class="spec"><div class="spec-label">Colors</div><div class="spec-value">4 (BLK/RED/GRN/BLU)</div></div>
+</div>
+
+<div id="encHashArea" style="display:none">
+<div class="hash-label">SHA-256 Checksum</div>
+<div id="encHash" class="hash-box"></div>
+</div>
+
+<div id="encDlArea" class="dl-area">
+<button id="encDlBtn" class="btn btn-success">Download MP4 Video</button>
+</div>
+</div>
+
+<!-- DECODE -->
+<div id="decodeSection" class="section">
+<div class="card">
+<div id="decDropZone" class="drop-zone">
+<div class="icon">&#127916;</div>
+<div class="label">Drop encoded video here</div>
+<div class="sub">MP4/WebM video encoded by this tool</div>
+</div>
+<input type="file" id="decFileInput" accept="video/*" style="display:none">
+<div id="decFileInfo" class="file-info" style="display:none">
+<div class="fi-icon">&#127916;</div>
+<div class="fi-details">
+<div id="decFileName" class="fi-name"></div>
+<div id="decFileSize" class="fi-size"></div>
+</div>
+<button id="decRemoveBtn" class="fi-remove" title="Remove">&times;</button>
+</div>
+</div>
+
+<button id="decodeBtn" class="btn btn-primary" disabled>Decode Video to File</button>
+
+<div id="decProgress" class="progress-wrap">
+<div class="progress-bar-bg"><div id="decBar" class="progress-bar"></div></div>
+<div class="progress-text"><span id="decPercent">0%</span><span id="decStatus">Preparing...</span></div>
+</div>
+
+<div id="decStatusMsg" class="status"></div>
+
+<div id="decVerify" class="verify-result"></div>
+
+<div id="decHashArea" style="display:none">
+<div class="hash-label">Expected SHA-256</div>
+<div id="decHashExpected" class="hash-box"></div>
+<div class="hash-label" style="margin-top:8px">Actual SHA-256</div>
+<div id="decHashActual" class="hash-box"></div>
+</div>
+
+<div id="decDlArea" class="dl-area">
+<button id="decDlBtn" class="btn btn-success">Download Extracted File</button>
+</div>
+</div>
+
+<div class="info-section">
+<h3>How it works</h3>
+<div class="step"><div class="step-num">1</div><div class="step-text">Select any file. The tool reads it as binary data and computes a SHA-256 hash.</div></div>
+<div class="step"><div class="step-num">2</div><div class="step-text">Each byte is split into four 2-bit values, mapped to 4 colors: black (00), red (01), green (10), blue (11).</div></div>
+<div class="step"><div class="step-num">3</div><div class="step-text">Colors are drawn as 16x16 pixel blocks on a 1280x720 canvas — aligned with H.264 macroblocks for YouTube survival.</div></div>
+<div class="step"><div class="step-num">4</div><div class="step-text">Frames are encoded as real H.264 video (all keyframes, high bitrate) and packaged into an MP4 container.</div></div>
+<div class="step"><div class="step-num">5</div><div class="step-text">To decode, upload the video back. The tool reads each frame, detects block colors, reconstructs the binary, and verifies SHA-256.</div></div>
+</div>
+
+<div class="footer">
+File2Video Encoder — All processing happens locally in your browser. No data is sent to any server.
+</div>
+</div>
+
+<script type="module">
+import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm';
+
+const W = 1280, H = 720, BS = 16, FPS = 30;
+const COLS = W / BS, ROWS = H / BS, BPF = COLS * ROWS;
+const COLORS = [[0,0,0],[255,0,0],[0,255,0],[0,0,255]];
+const MAGIC = [0x46,0x32,0x56,0x31];
+
+if (!('VideoEncoder' in window)) {
+  document.getElementById('compatWarn').style.display = 'block';
+}
+
+const $ = id => document.getElementById(id);
+
+let encFile = null, encBlob = null;
+let decFile = null, decResult = null;
+
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.section').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    $(t.dataset.tab + 'Section').classList.add('active');
+  });
+});
+
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b/1024).toFixed(1) + ' KB';
+  return (b/1048576).toFixed(2) + ' MB';
+}
+
+async function sha256(buf) {
+  const h = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function setupDrop(zoneId, inputId, onFile) {
+  const zone = $(zoneId), inp = $(inputId);
+  zone.addEventListener('click', () => inp.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); if(e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
+  inp.addEventListener('change', () => { if(inp.files[0]) onFile(inp.files[0]); });
+}
+
+function showStatus(id, type, msg) {
+  const el = $(id);
+  el.className = 'status show ' + type;
+  const icons = {info:'&#9432;',ok:'&#10003;',err:'&#10007;',warn:'&#9888;'};
+  el.innerHTML = '<span class="s-icon">' + (icons[type]||'') + '</span><span>' + msg + '</span>';
+}
+function hideStatus(id) { $(id).className = 'status'; }
+
+setupDrop('encDropZone', 'encFileInput', f => {
+  if (f.size > 52428800) { showStatus('encStatusMsg','warn','File is larger than 50 MB. Encoding may be slow and use significant memory.'); }
+  else { hideStatus('encStatusMsg'); }
+  encFile = f;
+  $('encDropZone').style.display = 'none';
+  $('encFileInfo').style.display = 'flex';
+  $('encFileName').textContent = f.name;
+  $('encFileSize').textContent = fmtSize(f.size);
+  $('encodeBtn').disabled = false;
+  $('encDlArea').classList.remove('show');
+  $('encSpecs').style.display = 'none';
+  $('encHashArea').style.display = 'none';
+  encBlob = null;
+});
+
+$('encRemoveBtn').addEventListener('click', () => {
+  encFile = null; encBlob = null;
+  $('encDropZone').style.display = '';
+  $('encFileInfo').style.display = 'none';
+  $('encodeBtn').disabled = true;
+  $('encDlArea').classList.remove('show');
+  $('encProgress').classList.remove('show');
+  $('encSpecs').style.display = 'none';
+  $('encHashArea').style.display = 'none';
+  hideStatus('encStatusMsg');
+});
+
+setupDrop('decDropZone', 'decFileInput', f => {
+  decFile = f;
+  $('decDropZone').style.display = 'none';
+  $('decFileInfo').style.display = 'flex';
+  $('decFileName').textContent = f.name;
+  $('decFileSize').textContent = fmtSize(f.size);
+  $('decodeBtn').disabled = false;
+  $('decDlArea').classList.remove('show');
+  $('decVerify').className = 'verify-result';
+  $('decHashArea').style.display = 'none';
+  hideStatus('decStatusMsg');
+  decResult = null;
+});
+
+$('decRemoveBtn').addEventListener('click', () => {
+  decFile = null; decResult = null;
+  $('decDropZone').style.display = '';
+  $('decFileInfo').style.display = 'none';
+  $('decodeBtn').disabled = true;
+  $('decDlArea').classList.remove('show');
+  $('decProgress').classList.remove('show');
+  $('decVerify').className = 'verify-result';
+  $('decHashArea').style.display = 'none';
+  hideStatus('decStatusMsg');
+});
+
+function setProgress(barId, pctId, statusId, pct, text) {
+  $(barId).style.width = pct + '%';
+  $(pctId).textContent = Math.round(pct) + '%';
+  $(statusId).textContent = text;
+}
+
+function buildPayload(filename, fileData, hash) {
+  const hdr = JSON.stringify({ name: filename, size: fileData.length, hash: hash });
+  const hdrBytes = new TextEncoder().encode(hdr);
+  const payload = new Uint8Array(4 + 4 + hdrBytes.length + fileData.length);
+  payload[0]=MAGIC[0]; payload[1]=MAGIC[1]; payload[2]=MAGIC[2]; payload[3]=MAGIC[3];
+  const hl = hdrBytes.length;
+  payload[4]=(hl>>24)&0xFF; payload[5]=(hl>>16)&0xFF; payload[6]=(hl>>8)&0xFF; payload[7]=hl&0xFF;
+  payload.set(hdrBytes, 8);
+  payload.set(fileData, 8 + hdrBytes.length);
+  return payload;
+}
+
+function payloadToValues(payload) {
+  const vals = new Uint8Array(payload.length * 4);
+  for (let i = 0; i < payload.length; i++) {
+    const b = payload[i];
+    vals[i*4]   = (b >> 6) & 3;
+    vals[i*4+1] = (b >> 4) & 3;
+    vals[i*4+2] = (b >> 2) & 3;
+    vals[i*4+3] = b & 3;
+  }
+  return vals;
+}
+
+function renderFrame(ctx, values, frameIdx) {
+  const off = frameIdx * BPF;
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const vi = off + r * COLS + c;
+      const v = vi < values.length ? values[vi] : 0;
+      const [cr, cg, cb] = COLORS[v];
+      ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+      ctx.fillRect(c * BS, r * BS, BS, BS);
+    }
+  }
+}
+
+$('encodeBtn').addEventListener('click', async () => {
+  if (!encFile) return;
+  const btn = $('encodeBtn');
+  btn.disabled = true;
+  $('encProgress').classList.add('show');
+  $('encDlArea').classList.remove('show');
+  $('encSpecs').style.display = 'none';
+  $('encHashArea').style.display = 'none';
+  hideStatus('encStatusMsg');
+
+  try {
+    setProgress('encBar','encPercent','encStatus', 2, 'Reading file...');
+    const fileData = new Uint8Array(await encFile.arrayBuffer());
+
+    setProgress('encBar','encPercent','encStatus', 5, 'Computing SHA-256...');
+    const hash = await sha256(fileData);
+
+    setProgress('encBar','encPercent','encStatus', 8, 'Building payload...');
+    const payload = buildPayload(encFile.name, fileData, hash);
+    const values = payloadToValues(payload);
+    const totalFrames = Math.ceil(values.length / BPF);
+
+    $('specFrames').textContent = totalFrames;
+    $('encSpecs').style.display = 'grid';
+    $('encHashArea').style.display = 'block';
+    $('encHash').textContent = hash;
+
+    setProgress('encBar','encPercent','encStatus', 10, 'Initializing H.264 encoder...');
+
+    const support = await VideoEncoder.isConfigSupported({
+      codec: 'avc1.42001f',
+      width: W, height: H,
+      bitrate: 8_000_000,
+      framerate: FPS,
+    });
+    if (!support.supported) {
+      throw new Error('H.264 encoding is not supported by this browser.');
+    }
+
+    const muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      video: { codec: 'avc', width: W, height: H },
+      fastStart: 'in-memory',
+    });
+
+    let encodedFrames = 0;
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => {
+        muxer.addVideoChunk(chunk, meta);
+        encodedFrames++;
+      },
+      error: e => { throw e; },
+    });
+
+    encoder.configure({
+      codec: 'avc1.42001f',
+      width: W, height: H,
+      bitrate: 8_000_000,
+      framerate: FPS,
+      latencyMode: 'quality',
+    });
+
+    const canvas = new OffscreenCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+
+    for (let i = 0; i < totalFrames; i++) {
+      renderFrame(ctx, values, i);
+
+      const frame = new VideoFrame(canvas, {
+        timestamp: i * (1_000_000 / FPS),
+        duration: 1_000_000 / FPS,
+      });
+      encoder.encode(frame, { keyFrame: true });
+      frame.close();
+
+      if (i % 5 === 0 || i === totalFrames - 1) {
+        const pct = 10 + (i / totalFrames) * 85;
+        setProgress('encBar','encPercent','encStatus', pct, `Encoding frame ${i+1} / ${totalFrames}...`);
+        await new Promise(r => setTimeout(r, 0));
+      }
+    }
+
+    await encoder.flush();
+    encoder.close();
+    muxer.finalize();
+
+    const mp4Buf = muxer.target.buffer;
+    encBlob = new Blob([mp4Buf], { type: 'video/mp4' });
+
+    setProgress('encBar','encPercent','encStatus', 100, 'Done!');
+    showStatus('encStatusMsg','ok',
+      `Video created: ${totalFrames} frames, ${fmtSize(mp4Buf.byteLength)}. Ready to download.`);
+    $('encDlArea').classList.add('show');
+
+  } catch(e) {
+    console.error(e);
+    showStatus('encStatusMsg','err','Encoding failed: ' + e.message);
+  }
+  btn.disabled = false;
+});
+
+$('encDlBtn').addEventListener('click', () => {
+  if (!encBlob) return;
+  const name = encFile ? encFile.name.replace(/\.[^.]+$/,'') + '_encoded.mp4' : 'encoded.mp4';
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(encBlob);
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+function sampleBlock(data, w, bx, by) {
+  let tr=0,tg=0,tb=0,n=0;
+  const sx = bx*BS+4, sy = by*BS+4;
+  for (let y=sy; y<sy+8; y++) {
+    for (let x=sx; x<sx+8; x++) {
+      const idx = (y*w+x)*4;
+      tr += data[idx]; tg += data[idx+1]; tb += data[idx+2];
+      n++;
+    }
+  }
+  const ar=tr/n, ag=tg/n, ab=tb/n;
+  let best=0, minD=Infinity;
+  for (let v=0;v<4;v++) {
+    const [cr,cg,cb]=COLORS[v];
+    const d=(ar-cr)**2+(ag-cg)**2+(ab-cb)**2;
+    if(d<minD){minD=d;best=v;}
+  }
+  return best;
+}
+
+$('decodeBtn').addEventListener('click', async () => {
+  if (!decFile) return;
+  const btn = $('decodeBtn');
+  btn.disabled = true;
+  $('decProgress').classList.add('show');
+  $('decDlArea').classList.remove('show');
+  $('decVerify').className = 'verify-result';
+  $('decHashArea').style.display = 'none';
+  hideStatus('decStatusMsg');
+
+  try {
+    setProgress('decBar','decPercent','decStatus', 2, 'Loading video...');
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.src = URL.createObjectURL(decFile);
+
+    await new Promise((res, rej) => {
+      video.onloadedmetadata = res;
+      video.onerror = () => rej(new Error('Failed to load video. Make sure it is a valid video file.'));
+    });
+    await new Promise((res) => {
+      video.oncanplaythrough = res;
+      video.load();
+    });
+
+    const vw = video.videoWidth, vh = video.videoHeight;
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+    const estFrames = Math.max(1, Math.round(video.duration * FPS));
+
+    setProgress('decBar','decPercent','decStatus', 5, `Extracting ${estFrames} frames...`);
+
+    const allValues = [];
+    let headerParsed = false;
+    let neededValues = Infinity;
+
+    for (let i = 0; i < estFrames; i++) {
+      const t = (i + 0.02) / FPS;
+      if (t > video.duration + 0.5) break;
+
+      video.currentTime = t;
+      await new Promise(r => { video.onseeked = r; });
+      await new Promise(r => setTimeout(r, 40));
+
+      ctx.drawImage(video, 0, 0, W, H);
+      const imgData = ctx.getImageData(0, 0, W, H);
+
+      for (let row = 0; row < ROWS; row++) {
+        for (let col = 0; col < COLS; col++) {
+          allValues.push(sampleBlock(imgData.data, W, col, row));
+        }
+      }
+
+      if (!headerParsed && allValues.length >= 64) {
+        const tempBytes = [];
+        for (let j = 0; j < Math.min(allValues.length, 10000); j += 4) {
+          if (j+3 < allValues.length) {
+            tempBytes.push((allValues[j]<<6)|(allValues[j+1]<<4)|(allValues[j+2]<<2)|allValues[j+3]);
+          }
+        }
+        if (tempBytes[0]===MAGIC[0] && tempBytes[1]===MAGIC[1] && tempBytes[2]===MAGIC[2] && tempBytes[3]===MAGIC[3]) {
+          if (tempBytes.length >= 8) {
+            const hl = (tempBytes[4]<<24)|(tempBytes[5]<<16)|(tempBytes[6]<<8)|tempBytes[7];
+            if (tempBytes.length >= 8 + hl) {
+              try {
+                const hdrJson = new TextDecoder().decode(new Uint8Array(tempBytes.slice(8, 8+hl)));
+                const hdr = JSON.parse(hdrJson);
+                const totalPayload = 8 + hl + hdr.size;
+                neededValues = totalPayload * 4;
+                headerParsed = true;
+              } catch(e) {}
+            }
+          }
+        }
+      }
+
+      if (headerParsed && allValues.length >= neededValues) {
+        const pct = 100;
+        setProgress('decBar','decPercent','decStatus', pct, 'All data frames extracted.');
+        break;
+      }
+
+      const pct = 5 + ((i+1)/estFrames)*80;
+      setProgress('decBar','decPercent','decStatus', pct, `Frame ${i+1} / ${estFrames}...`);
+    }
+
+    URL.revokeObjectURL(video.src);
+
+    setProgress('decBar','decPercent','decStatus', 90, 'Reconstructing file...');
+
+    const byteCount = Math.floor(allValues.length / 4);
+    const bytes = new Uint8Array(byteCount);
+    for (let i = 0; i < byteCount; i++) {
+      bytes[i] = (allValues[i*4]<<6)|(allValues[i*4+1]<<4)|(allValues[i*4+2]<<2)|allValues[i*4+3];
+    }
+
+    if (bytes[0]!==MAGIC[0]||bytes[1]!==MAGIC[1]||bytes[2]!==MAGIC[2]||bytes[3]!==MAGIC[3]) {
+      throw new Error('This video does not contain encoded file data (magic number not found). Make sure you are using a video created by this tool.');
+    }
+
+    const headerLen = (bytes[4]<<24)|(bytes[5]<<16)|(bytes[6]<<8)|bytes[7];
+    if (headerLen > 10000 || headerLen < 10) {
+      throw new Error('Invalid header length. The video may be corrupted.');
+    }
+
+    const headerJson = new TextDecoder().decode(bytes.slice(8, 8+headerLen));
+    const header = JSON.parse(headerJson);
+
+    if (8 + headerLen + header.size > bytes.length) {
+      throw new Error('Video does not contain enough data. It may be incomplete or corrupted. Expected ' + (8+headerLen+header.size) + ' bytes but got ' + bytes.length);
+    }
+
+    const fileData = bytes.slice(8 + headerLen, 8 + headerLen + header.size);
+
+    setProgress('decBar','decPercent','decStatus', 95, 'Verifying SHA-256...');
+    const actualHash = await sha256(fileData);
+    const isValid = actualHash === header.hash;
+
+    setProgress('decBar','decPercent','decStatus', 100, 'Done!');
+
+    $('decHashArea').style.display = 'block';
+    $('decHashExpected').textContent = header.hash;
+    $('decHashActual').textContent = actualHash;
+
+    const vr = $('decVerify');
+    if (isValid) {
+      vr.className = 'verify-result show pass';
+      vr.textContent = 'SHA-256 MATCH — File integrity verified. No data loss.';
+      showStatus('decStatusMsg','ok', `File "${header.name}" (${fmtSize(header.size)}) extracted successfully.`);
+    } else {
+      vr.className = 'verify-result show fail';
+      vr.textContent = 'SHA-256 MISMATCH — File may be corrupted. This can happen after YouTube re-encoding.';
+      showStatus('decStatusMsg','warn', `File "${header.name}" extracted but SHA-256 does not match. The file may have minor corruption from video compression.`);
+    }
+
+    decResult = { data: fileData, filename: header.name };
+    $('decDlArea').classList.add('show');
+
+  } catch(e) {
+    console.error(e);
+    showStatus('decStatusMsg','err', 'Decoding failed: ' + e.message);
+  }
+  btn.disabled = false;
+});
+
+$('decDlBtn').addEventListener('click', () => {
+  if (!decResult) return;
+  const blob = new Blob([decResult.data]);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = decResult.filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+</script>
+</body>
+</html>
