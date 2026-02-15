@@ -101,7 +101,7 @@ a{color:var(--accent);text-decoration:none}
 <div class="wrap">
 <div class="header">
 <h1>SWAMPCRYPT</h1>
-<p class="subtitle">// steganography_engine v2.0</p>
+<p class="subtitle">// steganography_engine v3.0</p>
 <p class="shrek-quote">"Ogres have layers. Data has layers." — Shrek</p>
 </div>
 
@@ -157,7 +157,7 @@ a{color:var(--accent);text-decoration:none}
 <div id="encSpecs" class="specs" style="display:none">
 <div class="spec"><div class="spec-label">Resolution</div><div id="specRes" class="spec-value">1280 x 720</div></div>
 <div class="spec"><div class="spec-label">Codec</div><div class="spec-value">H.264 / AVC</div></div>
-<div class="spec"><div class="spec-label">Method</div><div class="spec-value">QIM Stego</div></div>
+<div class="spec"><div class="spec-label">Method</div><div class="spec-value">QIM + ECC</div></div>
 <div class="spec"><div class="spec-label">Frames</div><div id="specFrames" class="spec-value">&mdash;</div></div>
 <div class="spec"><div class="spec-label">Capacity</div><div id="specCapacity" class="spec-value">&mdash;</div></div>
 <div class="spec"><div class="spec-label">Bitrate</div><div class="spec-value">8 Mbps</div></div>
@@ -220,7 +220,10 @@ const SBS = 4;
 const SCOLS = W / SBS, SROWS = H / SBS;
 const BPF = SCOLS * SROWS;
 const BYTES_PER_FRAME = BPF >>> 3;
-const Q = 16;
+const Q = 48;
+const REDUNDANCY = 3;
+const EFFECTIVE_BPF = Math.floor(BPF / REDUNDANCY);
+const EFFECTIVE_BYTES_PER_FRAME = EFFECTIVE_BPF >>> 3;
 const MAGIC = [0x53, 0x57, 0x4D, 0x50];
 const MIN_FRAMES = 90;
 
@@ -235,6 +238,26 @@ if (!('VideoEncoder' in window)) {
 }
 
 const $ = id => document.getElementById(id);
+
+function crc32(data) {
+  let table = crc32.table;
+  if (!table) {
+    table = new Uint32Array(256);
+    for (let i = 0; i < 256; i++) {
+      let c = i;
+      for (let j = 0; j < 8; j++) {
+        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+      }
+      table[i] = c;
+    }
+    crc32.table = table;
+  }
+  let crc = 0xFFFFFFFF;
+  for (let i = 0; i < data.length; i++) {
+    crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xFFFFFFFF) >>> 0;
+}
 
 (function initMatrix() {
   const c = $('matrixBg'), ctx = c.getContext('2d');
@@ -275,16 +298,55 @@ function qimExtract(val) {
   return d0 < d1 ? 0 : 1;
 }
 
+function interleaveIndices(totalBits) {
+  const indices = new Uint32Array(totalBits);
+  for (let i = 0; i < totalBits; i++) indices[i] = i;
+  let seed = 0x5F3759DF;
+  for (let i = totalBits - 1; i > 0; i--) {
+    seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
+    const j = seed % (i + 1);
+    const tmp = indices[i];
+    indices[i] = indices[j];
+    indices[j] = tmp;
+  }
+  return indices;
+}
+
 function embedFrame(imgData, slice) {
   const d = imgData.data;
+  const totalBits = BPF;
+  const logicalBits = EFFECTIVE_BPF;
+
+  const dataBits = new Uint8Array(logicalBits);
+  if (slice) {
+    for (let i = 0; i < logicalBits; i++) {
+      const byteI = i >>> 3;
+      const bitP = 7 - (i & 7);
+      if (byteI < slice.length) {
+        dataBits[i] = (slice[byteI] >>> bitP) & 1;
+      }
+    }
+  }
+
+  const expandedBits = new Uint8Array(totalBits);
+  for (let i = 0; i < logicalBits; i++) {
+    for (let r = 0; r < REDUNDANCY; r++) {
+      expandedBits[i * REDUNDANCY + r] = dataBits[i];
+    }
+  }
+
+  const interleaveMap = interleaveIndices(totalBits);
+  const finalBits = new Uint8Array(totalBits);
+  for (let i = 0; i < totalBits; i++) {
+    finalBits[interleaveMap[i]] = expandedBits[i];
+  }
+
   let bi = 0;
   for (let by = 0; by < SROWS; by++) {
     const sy = by * SBS;
     for (let bx = 0; bx < SCOLS; bx++) {
       const sx = bx * SBS;
-      const byteI = bi >>> 3;
-      const bitP = 7 - (bi & 7);
-      const bit = (slice && byteI < slice.length) ? ((slice[byteI] >>> bitP) & 1) : 0;
+      const bit = finalBits[bi];
       let sumY = 0;
       for (let py = 0; py < SBS; py++) {
         for (let px = 0; px < SBS; px++) {
@@ -310,7 +372,9 @@ function embedFrame(imgData, slice) {
 
 function extractFrame(imgData) {
   const d = imgData.data;
-  const out = new Uint8Array(BYTES_PER_FRAME);
+  const totalBits = BPF;
+
+  const rawBits = new Uint8Array(totalBits);
   let bi = 0;
   for (let by = 0; by < SROWS; by++) {
     const sy = by * SBS;
@@ -324,10 +388,26 @@ function extractFrame(imgData) {
         }
       }
       const avgY = sumY / (SBS * SBS);
-      const bit = qimExtract(avgY);
-      if (bit) out[bi >>> 3] |= (1 << (7 - (bi & 7)));
+      rawBits[bi] = qimExtract(avgY);
       bi++;
     }
+  }
+
+  const interleaveMap = interleaveIndices(totalBits);
+  const deinterleavedBits = new Uint8Array(totalBits);
+  for (let i = 0; i < totalBits; i++) {
+    deinterleavedBits[i] = rawBits[interleaveMap[i]];
+  }
+
+  const logicalBits = EFFECTIVE_BPF;
+  const out = new Uint8Array(EFFECTIVE_BYTES_PER_FRAME);
+  for (let i = 0; i < logicalBits; i++) {
+    let votes = 0;
+    for (let r = 0; r < REDUNDANCY; r++) {
+      votes += deinterleavedBits[i * REDUNDANCY + r];
+    }
+    const bit = (votes > REDUNDANCY / 2) ? 1 : 0;
+    if (bit) out[i >>> 3] |= (1 << (7 - (i & 7)));
   }
   return out;
 }
@@ -348,8 +428,9 @@ class PayloadView {
     this.length = this.prefixLen + fileData.length;
   }
   getFrameSlice(frameIdx) {
-    const offset = frameIdx * BYTES_PER_FRAME;
-    const end = Math.min(offset + BYTES_PER_FRAME, this.length);
+    const bpf = EFFECTIVE_BYTES_PER_FRAME;
+    const offset = frameIdx * bpf;
+    const end = Math.min(offset + bpf, this.length);
     if (end <= offset) return null;
     if (offset >= this.prefixLen) return this.fileData.subarray(offset - this.prefixLen, end - this.prefixLen);
     if (end <= this.prefixLen) return this.prefix.subarray(offset, end);
@@ -386,9 +467,9 @@ function deobfuscateHeader(o) {
 }
 
 function estimateOutput(fileSize) {
-  const hdrEst = 150;
+  const hdrEst = 200;
   const payloadSize = 8 + hdrEst + fileSize;
-  const dataFrames = Math.ceil(payloadSize / BYTES_PER_FRAME);
+  const dataFrames = Math.ceil(payloadSize / EFFECTIVE_BYTES_PER_FRAME);
   const totalFrames = Math.max(dataFrames, MIN_FRAMES);
   const duration = totalFrames / FPS;
   return { est: Math.ceil(duration * BITRATE / 8), frames: totalFrames, duration, dataFrames };
@@ -537,14 +618,25 @@ $('encodeBtn').addEventListener('click', async () => {
     setProgress('encBar', 'encPercent', 'encStatus', 6, 'Preparing payload...');
     await new Promise(r => setTimeout(r, 0));
 
-    const header = JSON.stringify({ n: encFile.name, s: fileData.length, v: 3 });
+    const checksum = crc32(fileData);
+    const header = JSON.stringify({
+      n: encFile.name,
+      s: fileData.length,
+      v: 4,
+      q: Q,
+      r: REDUNDANCY,
+      c: checksum,
+      w: W,
+      h: H,
+      b: SBS
+    });
     const headerBytes = obfuscateHeader(header);
     const payload = new PayloadView(headerBytes, fileData);
-    const dataFrames = Math.ceil(payload.length / BYTES_PER_FRAME);
+    const dataFrames = Math.ceil(payload.length / EFFECTIVE_BYTES_PER_FRAME);
     const totalFrames = Math.max(dataFrames, MIN_FRAMES);
 
     $('specFrames').textContent = totalFrames + (totalFrames > dataFrames ? ' (' + dataFrames + ' data + ' + (totalFrames - dataFrames) + ' pad)' : '');
-    $('specCapacity').textContent = fmtSize(BYTES_PER_FRAME) + '/frame';
+    $('specCapacity').textContent = fmtSize(EFFECTIVE_BYTES_PER_FRAME) + '/frame';
     $('encSpecs').style.display = 'grid';
 
     setProgress('encBar', 'encPercent', 'encStatus', 8, 'Initializing H.264...');
@@ -635,7 +727,7 @@ $('encodeBtn').addEventListener('click', async () => {
 
     setProgress('encBar', 'encPercent', 'encStatus', 100, 'Done!');
     showStatus('encStatusMsg', 'ok',
-      'Data hidden in the swamp! ' + totalFrames + ' frames, ' + (totalFrames / FPS).toFixed(1) + 's, ' + fmtSize(mp4Buf.byteLength) + '. Video looks normal.');
+      'Data hidden in the swamp! ' + totalFrames + ' frames, ' + (totalFrames / FPS).toFixed(1) + 's, ' + fmtSize(mp4Buf.byteLength) + '. Video looks normal. CRC32: ' + checksum.toString(16).toUpperCase());
     $('encDlArea').classList.add('show');
 
   } catch (e) {
@@ -730,7 +822,8 @@ $('decodeBtn').addEventListener('click', async () => {
     let headerParsed = false;
     let totalNeeded = 0;
     let parsedHeader = null;
-    const tempBuffer = new Uint8Array(Math.min(estFrames * BYTES_PER_FRAME, 200000));
+    const maxTempSize = Math.min(estFrames * EFFECTIVE_BYTES_PER_FRAME, 500000);
+    const tempBuffer = new Uint8Array(maxTempSize);
     let tempOffset = 0;
 
     const startTime = performance.now();
@@ -739,7 +832,7 @@ $('decodeBtn').addEventListener('click', async () => {
     for (let i = 0; i < estFrames; i++) {
       if (decCancelled) throw new Error('Cancelled');
 
-      const t = (i + 0.02) / FPS;
+      const t = i / FPS;
       if (t > video.duration + 0.5) break;
 
       video.currentTime = t;
@@ -750,7 +843,7 @@ $('decodeBtn').addEventListener('click', async () => {
       const frameBytes = extractFrame(imgData);
 
       if (!headerParsed) {
-        const copyLen = Math.min(BYTES_PER_FRAME, tempBuffer.length - tempOffset);
+        const copyLen = Math.min(EFFECTIVE_BYTES_PER_FRAME, tempBuffer.length - tempOffset);
         if (copyLen > 0) { tempBuffer.set(frameBytes.subarray(0, copyLen), tempOffset); tempOffset += copyLen; }
 
         if (tempOffset >= 8) {
@@ -782,7 +875,7 @@ $('decodeBtn').addEventListener('click', async () => {
       } else {
         const remaining = totalNeeded - outputOffset;
         if (remaining > 0) {
-          const toCopy = Math.min(BYTES_PER_FRAME, remaining);
+          const toCopy = Math.min(EFFECTIVE_BYTES_PER_FRAME, remaining);
           outputBuffer.set(frameBytes.subarray(0, toCopy), outputOffset);
           outputOffset += toCopy;
         }
@@ -797,7 +890,7 @@ $('decodeBtn').addEventListener('click', async () => {
         const pct = 5 + ((i + 1) / estFrames) * 80;
         const elapsed = (now - startTime) / 1000;
         const fps = (i + 1) / elapsed;
-        const framesLeft = headerParsed ? Math.ceil((totalNeeded - outputOffset) / BYTES_PER_FRAME) : (estFrames - i - 1);
+        const framesLeft = headerParsed ? Math.ceil((totalNeeded - outputOffset) / EFFECTIVE_BYTES_PER_FRAME) : (estFrames - i - 1);
         const etaStr = i > 3 ? ' (ETA: ' + fmtTime(framesLeft / fps) + ')' : '';
         setProgress('decBar', 'decPercent', 'decStatus', pct, 'Frame ' + (i + 1) + '/' + estFrames + etaStr);
         await new Promise(r => setTimeout(r, 0));
@@ -807,17 +900,27 @@ $('decodeBtn').addEventListener('click', async () => {
 
     if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
 
-    if (!headerParsed) throw new Error('No hidden data found. Use a video created by SwampCrypt.');
+    if (!headerParsed) throw new Error('No hidden data found. Use a video created by SwampCrypt v3+.');
     if (outputOffset < totalNeeded) throw new Error('Incomplete data. Expected ' + totalNeeded + ' bytes, got ' + outputOffset + '.');
 
-    setProgress('decBar', 'decPercent', 'decStatus', 95, 'Extracting file...');
+    setProgress('decBar', 'decPercent', 'decStatus', 95, 'Verifying integrity...');
     await new Promise(r => setTimeout(r, 0));
 
     const hl = (outputBuffer[4] << 24) | (outputBuffer[5] << 16) | (outputBuffer[6] << 8) | outputBuffer[7];
     const fileData = outputBuffer.slice(8 + hl, 8 + hl + parsedHeader.size);
 
+    let integrityMsg = '';
+    if (parsedHeader.c !== undefined) {
+      const extractedCrc = crc32(fileData);
+      if (extractedCrc === parsedHeader.c) {
+        integrityMsg = ' CRC32 verified OK.';
+      } else {
+        integrityMsg = ' WARNING: CRC32 mismatch (expected ' + parsedHeader.c.toString(16).toUpperCase() + ', got ' + extractedCrc.toString(16).toUpperCase() + '). File may have minor corruption from video compression.';
+      }
+    }
+
     setProgress('decBar', 'decPercent', 'decStatus', 100, 'Done!');
-    showStatus('decStatusMsg', 'ok', 'File "' + parsedHeader.name + '" (' + fmtSize(parsedHeader.size) + ') extracted from the swamp!');
+    showStatus('decStatusMsg', 'ok', 'File "' + parsedHeader.name + '" (' + fmtSize(parsedHeader.size) + ') extracted from the swamp!' + integrityMsg);
 
     decResult = { data: fileData, filename: parsedHeader.name };
     $('decDlArea').classList.add('show');
