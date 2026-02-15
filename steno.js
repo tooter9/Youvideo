@@ -1,139 +1,115 @@
 import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm';
 
-const W = 854;
-const H = 480;
-const FPS = 24;                    // ← 24 вместо 30 — экономия ~20%
-const BITRATE = 1_400_000;         // чуть ниже — лучше сжимается
-const SBS = 32;
-const Q = 112;                     // чуть агрессивнее — меньше заметно
-const REDUNDANCY = 2;
+const W = 1280, H = 720, FPS = 30;
+const BITRATE = 2_000_000;
+const SBS = 16;
+const Q = 128;
+const REDUNDANCY = 3;
 const MIN_FRAMES = 30;
-const MAX_SAFE_FRAMES = 4800;      // ~3.3 минуты при 24 fps — разумный предел
-const KEYFRAME_EVERY = 72;         // ~3 секунды
-
+const KEYFRAME_INTERVAL = 10;
 const MAGIC = new Uint8Array([0x53, 0x57, 0x4D, 0x50]);
 const FORMAT_VERSION = 4;
 const XOR_KEY = new Uint8Array([0x53,0x48,0x52,0x45,0x4B,0x21,0x4F,0x47,0x52,0x45,0x53,0x57,0x41,0x4D,0x50,0x21]);
 
-const SCOLS = W / SBS | 0;
-const SROWS = H / SBS | 0;
+const SCOLS = W / SBS;
+const SROWS = H / SBS;
 const BPF = SCOLS * SROWS;
-const EFFECTIVE_BPF = (BPF / REDUNDANCY) | 0;
-const EFFECTIVE_BYTES_PER_FRAME = EFFECTIVE_BPF >> 3;
+const EFFECTIVE_BPF = Math.floor(BPF / REDUNDANCY);
+const EFFECTIVE_BYTES_PER_FRAME = EFFECTIVE_BPF >>> 3;
 
 export const CONFIG = {
   W, H, FPS, BITRATE, SBS, Q, REDUNDANCY, MIN_FRAMES,
-  KEYFRAME_EVERY, MAX_SAFE_FRAMES,
-  SCOLS, SROWS, BPF, EFFECTIVE_BPF, EFFECTIVE_BYTES_PER_FRAME, FORMAT_VERSION
+  SCOLS, SROWS, BPF, EFFECTIVE_BPF, EFFECTIVE_BYTES_PER_FRAME, FORMAT_VERSION, KEYFRAME_INTERVAL
 };
 
-// ──────────────────────────────────────── CRC ────────────────────────────────────────
+// --- CRC32 ---
 const CRC_TABLE = new Uint32Array(256);
 for (let i = 0; i < 256; i++) {
   let c = i;
-  for (let j = 0; j < 8; j++) {
-    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-  }
+  for (let j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
   CRC_TABLE[i] = c;
 }
-
 export function crc32(data) {
   let crc = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) {
-    crc = CRC_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
-  }
+  for (let i = 0; i < data.length; i++) crc = CRC_TABLE[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
   return (crc ^ 0xFFFFFFFF) >>> 0;
 }
 
-// ──────────────────────────────────────── QIM ────────────────────────────────────────
+// --- QIM ---
 function qimEmbed(val, bit) {
-  const half = Q >> 1;
-  const t = bit === 0
+  const half = Q >>> 1;
+  return bit === 0
     ? Math.round(val / Q) * Q
     : Math.round((val - half) / Q) * Q + half;
-  return Math.max(0, Math.min(255, t | 0));
 }
-
 function qimExtract(val) {
-  const half = Q >> 1;
+  const half = Q >>> 1;
   const d0 = Math.abs(val - Math.round(val / Q) * Q);
-  const d1 = Math.abs(val - Math.round((val - half) / Q) * Q - half + Q);
+  const d1 = Math.abs(val - (Math.round((val - half) / Q) * Q + half));
   return d0 <= d1 ? 0 : 1;
 }
 
-// ──────────────────────────────────────── Interleave ────────────────────────────────────────
-let interleaveCache = null;
-let interleaveCacheSize = 0;
-
-function getInterleaveMap(bitCount) {
-  if (interleaveCache && interleaveCacheSize === bitCount) return interleaveCache;
-  const map = new Uint32Array(bitCount);
-  map.set(Array.from({length: bitCount}, (_,i)=>i));
+// --- Interleaving ---
+let _interleaveCache = null;
+let _interleaveCacheSize = 0;
+function interleaveIndices(totalBits) {
+  if (_interleaveCache && _interleaveCacheSize === totalBits) return _interleaveCache;
+  const indices = new Uint32Array(totalBits);
+  for (let i = 0; i < totalBits; i++) indices[i] = i;
   let seed = 0x5F3759DF;
-  for (let i = bitCount - 1; i > 0; i--) {
+  for (let i = totalBits - 1; i > 0; i--) {
     seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
     const j = seed % (i + 1);
-    [map[i], map[j]] = [map[j], map[i]];
+    [indices[i], indices[j]] = [indices[j], indices[i]];
   }
-  interleaveCache = map;
-  interleaveCacheSize = bitCount;
-  return map;
+  _interleaveCache = indices;
+  _interleaveCacheSize = totalBits;
+  return indices;
 }
 
-// ──────────────────────────────────────── Embed / Extract ────────────────────────────────────────
+// --- Frame Processing ---
 export function embedFrame(imgData, slice) {
   const d = imgData.data;
   const totalBits = BPF;
-  const map = getInterleaveMap(totalBits);
-
-  const dataBits = new Uint8Array(EFFECTIVE_BPF);
+  const logicalBits = EFFECTIVE_BPF;
+  const dataBits = new Uint8Array(logicalBits);
   if (slice) {
-    for (let i = 0; i < EFFECTIVE_BPF; i++) {
-      const byteIdx = i >> 3;
-      const bitPos = 7 - (i & 7);
-      dataBits[i] = byteIdx < slice.length ? (slice[byteIdx] >> bitPos) & 1 : 0;
+    for (let i = 0; i < logicalBits; i++) {
+      const byteI = i >>> 3;
+      const bitP = 7 - (i & 7);
+      dataBits[i] = byteI < slice.length ? ((slice[byteI] >>> bitP) & 1) : 0;
     }
   }
-
-  const bits = new Uint8Array(totalBits);
-  let pos = 0;
-  for (let i = 0; i < EFFECTIVE_BPF; i++) {
-    const b = dataBits[i];
-    bits[pos++] = b;
-    bits[pos++] = b;
+  const expandedBits = new Uint8Array(totalBits);
+  for (let i = 0; i < logicalBits; i++) {
+    expandedBits.fill(dataBits[i], i * REDUNDANCY, i * REDUNDANCY + REDUNDANCY);
   }
+  const interleaveMap = interleaveIndices(totalBits);
+  const finalBits = new Uint8Array(totalBits);
+  for (let i = 0; i < totalBits; i++) finalBits[interleaveMap[i]] = expandedBits[i];
 
-  const shuffled = new Uint8Array(totalBits);
-  for (let i = 0; i < totalBits; i++) {
-    shuffled[map[i]] = bits[i];
-  }
-
-  let bitIdx = 0;
-  for (let row = 0; row < SROWS; row++) {
-    const y0 = row * SBS;
-    for (let col = 0; col < SCOLS; col++) {
-      const x0 = col * SBS;
-      const bit = shuffled[bitIdx++];
-
-      let sum = 0;
-      for (let dy = 0; dy < SBS; dy++) {
-        const y = y0 + dy;
-        let off = (y * W + x0) << 2;
-        for (let dx = 0; dx < SBS; dx++, off += 4) {
-          sum += 0.299 * d[off] + 0.587 * d[off+1] + 0.114 * d[off+2];
+  let bi = 0;
+  for (let by = 0; by < SROWS; by++) {
+    const sy = by * SBS;
+    for (let bx = 0; bx < SCOLS; bx++) {
+      const sx = bx * SBS;
+      const bit = finalBits[bi++];
+      let sumY = 0;
+      for (let py = 0; py < SBS; py++) {
+        for (let px = 0; px < SBS; px++) {
+          const off = ((sy + py) * W + sx + px) << 2;
+          sumY += 0.299 * d[off] + 0.587 * d[off + 1] + 0.114 * d[off + 2];
         }
       }
-      const avg = sum / (SBS * SBS);
-      const target = qimEmbed(avg, bit);
-      const delta = (target - avg) | 0;
-
-      for (let dy = 0; dy < SBS; dy++) {
-        const y = y0 + dy;
-        let off = (y * W + x0) << 2;
-        for (let dx = 0; dx < SBS; dx++, off += 4) {
-          d[off  ] = Math.max(0, Math.min(255, d[off  ] + delta));
-          d[off+1] = Math.max(0, Math.min(255, d[off+1] + delta));
-          d[off+2] = Math.max(0, Math.min(255, d[off+2] + delta));
+      const avgY = sumY / (SBS * SBS);
+      const tgt = qimEmbed(avgY, bit);
+      const delta = tgt - avgY;
+      for (let py = 0; py < SBS; py++) {
+        for (let px = 0; px < SBS; px++) {
+          const off = ((sy + py) * W + sx + px) << 2;
+          d[off    ] = Math.max(0, Math.min(255, d[off    ] + delta));
+          d[off + 1] = Math.max(0, Math.min(255, d[off + 1] + delta));
+          d[off + 2] = Math.max(0, Math.min(255, d[off + 2] + delta));
         }
       }
     }
@@ -143,268 +119,319 @@ export function embedFrame(imgData, slice) {
 export function extractFrame(imgData) {
   const d = imgData.data;
   const totalBits = BPF;
-  const map = getInterleaveMap(totalBits);
-
-  const raw = new Uint8Array(totalBits);
-  let idx = 0;
-
-  for (let row = 0; row < SROWS; row++) {
-    const y0 = row * SBS;
-    for (let col = 0; col < SCOLS; col++) {
-      const x0 = col * SBS;
-      let sum = 0;
-      for (let dy = 0; dy < SBS; dy++) {
-        let off = ((y0 + dy) * W + x0) << 2;
-        for (let dx = 0; dx < SBS; dx++, off += 4) {
-          sum += 0.299 * d[off] + 0.587 * d[off+1] + 0.114 * d[off+2];
+  const rawBits = new Uint8Array(totalBits);
+  let bi = 0;
+  for (let by = 0; by < SROWS; by++) {
+    const sy = by * SBS;
+    for (let bx = 0; bx < SCOLS; bx++) {
+      const sx = bx * SBS;
+      let sumY = 0;
+      for (let py = 0; py < SBS; py++) {
+        for (let px = 0; px < SBS; px++) {
+          const off = ((sy + py) * W + sx + px) << 2;
+          sumY += 0.299 * d[off] + 0.587 * d[off + 1] + 0.114 * d[off + 2];
         }
       }
-      raw[idx++] = qimExtract(sum / (SBS * SBS));
+      rawBits[bi++] = qimExtract(sumY / (SBS * SBS));
     }
   }
+  const interleaveMap = interleaveIndices(totalBits);
+  const deinterleavedBits = new Uint8Array(totalBits);
+  for (let i = 0; i < totalBits; i++) deinterleavedBits[i] = rawBits[interleaveMap[i]];
 
-  const deint = new Uint8Array(totalBits);
-  for (let i = 0; i < totalBits; i++) {
-    deint[i] = raw[map[i]];
-  }
-
-  const bytes = new Uint8Array(EFFECTIVE_BYTES_PER_FRAME);
+  const out = new Uint8Array(EFFECTIVE_BYTES_PER_FRAME);
   for (let i = 0; i < EFFECTIVE_BPF; i++) {
-    let votes = deint[i*2] + deint[i*2 + 1];
-    if (votes >= 2) {  // REDUNDANCY=2 → majority = 2
-      bytes[i >> 3] |= 1 << (7 - (i & 7));
-    }
-  }
-  return bytes;
-}
-
-// ──────────────────────────────────────── Payload & Utils ────────────────────────────────────────
-function obfuscateHeader(json) {
-  const bytes = new TextEncoder().encode(json);
-  const out = new Uint8Array(bytes.length);
-  for (let i = 0; i < bytes.length; i++) {
-    out[i] = bytes[i] ^ XOR_KEY[i % XOR_KEY.length];
+    let votes = 0;
+    for (let r = 0; r < REDUNDANCY; r++) votes += deinterleavedBits[i * REDUNDANCY + r];
+    if (votes > REDUNDANCY / 2) out[i >>> 3] |= (1 << (7 - (i & 7)));
   }
   return out;
 }
 
-function deobfuscateHeader(scrambled) {
-  const bytes = new Uint8Array(scrambled.length);
-  for (let i = 0; i < scrambled.length; i++) {
-    bytes[i] = scrambled[i] ^ XOR_KEY[i % XOR_KEY.length];
-  }
-  return new TextDecoder().decode(bytes);
+// --- Header ---
+function obfuscateHeader(json) {
+  const b = new TextEncoder().encode(json);
+  const o = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) o[i] = b[i] ^ XOR_KEY[i % XOR_KEY.length];
+  return o;
+}
+function deobfuscateHeader(o) {
+  const b = new Uint8Array(o.length);
+  for (let i = 0; i < o.length; i++) b[i] = o[i] ^ XOR_KEY[i % XOR_KEY.length];
+  return new TextDecoder().decode(b);
 }
 
+// --- Payload ---
 class PayloadBuilder {
   constructor(headerJson, fileData) {
-    const header = obfuscateHeader(headerJson);
-    const crc = crc32(header);
-    const hlen = header.length;
-    const prefixLen = 4 + 1 + 4 + hlen + 4;
-
+    const headerBytes = obfuscateHeader(headerJson);
+    const headerCrc = crc32(headerBytes);
+    const hl = headerBytes.length;
+    const prefixLen = 4 + 1 + 4 + hl + 4;
     this.prefix = new Uint8Array(prefixLen);
-    let p = 0;
-    this.prefix.set(MAGIC, p); p += 4;
-    this.prefix[p++] = FORMAT_VERSION;
-    this.prefix[p++] = (hlen >> 24) & 255;
-    this.prefix[p++] = (hlen >> 16) & 255;
-    this.prefix[p++] = (hlen >> 8)  & 255;
-    this.prefix[p++] = hlen & 255;
-    this.prefix.set(header, p); p += hlen;
-    this.prefix[p++] = (crc >> 24) & 255;
-    this.prefix[p++] = (crc >> 16) & 255;
-    this.prefix[p++] = (crc >> 8)  & 255;
-    this.prefix[p  ] = crc & 255;
-
+    let pos = 0;
+    this.prefix.set(MAGIC, pos); pos += 4;
+    this.prefix[pos++] = FORMAT_VERSION;
+    this.prefix[pos++] = (hl >>> 24) & 0xFF;
+    this.prefix[pos++] = (hl >>> 16) & 0xFF;
+    this.prefix[pos++] = (hl >>> 8) & 0xFF;
+    this.prefix[pos++] = hl & 0xFF;
+    this.prefix.set(headerBytes, pos); pos += hl;
+    this.prefix[pos++] = (headerCrc >>> 24) & 0xFF;
+    this.prefix[pos++] = (headerCrc >>> 16) & 0xFF;
+    this.prefix[pos++] = (headerCrc >>> 8) & 0xFF;
+    this.prefix[pos  ] = headerCrc & 0xFF;
     this.fileData = fileData;
     this.prefixLen = prefixLen;
-    this.totalLength = prefixLen + fileData.length;
+    this.length = prefixLen + fileData.length;
   }
-
-  getSlice(frameIdx) {
+  getFrameSlice(frameIdx) {
     const bpf = EFFECTIVE_BYTES_PER_FRAME;
-    const start = frameIdx * bpf;
-    const end = Math.min(start + bpf, this.totalLength);
-    if (start >= this.totalLength) return null;
-
-    if (end <= this.prefixLen) {
-      return this.prefix.subarray(start, end);
-    }
-    if (start >= this.prefixLen) {
-      return this.fileData.subarray(start - this.prefixLen, end - this.prefixLen);
-    }
-
-    const buf = new Uint8Array(end - start);
-    const prefixPart = this.prefixLen - start;
-    buf.set(this.prefix.subarray(start, this.prefixLen));
-    buf.set(this.fileData.subarray(0, end - this.prefixLen), prefixPart);
-    return buf;
+    const offset = frameIdx * bpf;
+    const end = Math.min(offset + bpf, this.length);
+    if (end <= offset) return null;
+    if (offset >= this.prefixLen) return this.fileData.subarray(offset - this.prefixLen, end - this.prefixLen);
+    if (end <= this.prefixLen) return this.prefix.subarray(offset, end);
+    const result = new Uint8Array(end - offset);
+    result.set(this.prefix.subarray(offset, this.prefixLen));
+    result.set(this.fileData.subarray(0, end - this.prefixLen), this.prefixLen - offset);
+    return result;
   }
 }
 
-export function fmtSize(bytes) {
-  if (bytes < 1024) return bytes + ' B';
-  if (bytes < 1048576) return (bytes/1024).toFixed(1)+' KB';
-  if (bytes < 1073741824) return (bytes/1048576).toFixed(2)+' MB';
-  return (bytes/1073741824).toFixed(2)+' GB';
+// --- Utils ---
+export function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  if (b < 1073741824) return (b / 1048576).toFixed(2) + ' MB';
+  return (b / 1073741824).toFixed(2) + ' GB';
 }
-
-export function fmtTime(s) {
-  if (s < 60) return Math.round(s)+'s';
-  const m = Math.floor(s/60);
-  s = Math.round(s%60);
-  return m+'m '+s+'s';
+export function fmtTime(sec) {
+  if (sec < 60) return Math.round(sec) + 's';
+  return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
 }
-
-export function estimate(fileSizeBytes) {
-  const payloadBytes = 200 + 13 + fileSizeBytes;
-  const dataFrames = Math.ceil(payloadBytes / EFFECTIVE_BYTES_PER_FRAME);
-  const frames = Math.max(dataFrames, MIN_FRAMES);
-  if (frames > MAX_SAFE_FRAMES) {
-    console.warn(`Ограничение до ${MAX_SAFE_FRAMES} кадров`);
-  }
-  const dur = frames / FPS;
-  const estSize = Math.ceil(dur * BITRATE / 8);
-  return { estSize, frames, durationSec: dur, dataFrames };
+export function estimateOutput(fileSize) {
+  const hdrEst = 200;
+  const payloadSize = 13 + hdrEst + fileSize;
+  const dataFrames = Math.ceil(payloadSize / EFFECTIVE_BYTES_PER_FRAME);
+  const totalFrames = Math.max(dataFrames, MIN_FRAMES);
+  const duration = totalFrames / FPS;
+  return { est: Math.ceil(duration * BITRATE / 8), frames: totalFrames, duration, dataFrames };
 }
-
-async function yieldToMain(ms = 0) {
-  return new Promise(r => setTimeout(r, ms));
+function yieldToUI() {
+  return new Promise(r => setTimeout(r, 0));
 }
-
-// ──────────────────────────────────────── ENCODE ────────────────────────────────────────
-export async function encode(file, coverVideo, onProgress, isCancelled = () => false) {
-  onProgress(3, 'Чтение файла...');
-  const fileBytes = new Uint8Array(await file.arrayBuffer());
-
-  onProgress(6, 'Подготовка заголовка...');
-  const checksum = crc32(fileBytes);
-  const header = JSON.stringify({
-    n: file.name,
-    s: fileBytes.length,
-    v: FORMAT_VERSION,
-    q: Q,
-    r: REDUNDANCY,
-    c: checksum,
-    w: W, h: H, b: SBS
+function seekVideo(video, time) {
+  return new Promise((resolve) => {
+    const onSeeked = () => { video.removeEventListener('seeked', onSeeked); resolve(); };
+    video.addEventListener('seeked', onSeeked);
+    video.currentTime = time;
+    setTimeout(() => { video.removeEventListener('seeked', onSeeked); resolve(); }, 2000);
   });
-  const payload = new PayloadBuilder(header, fileBytes);
-
-  const dataFramesNeeded = Math.ceil(payload.totalLength / EFFECTIVE_BYTES_PER_FRAME);
-  let totalFrames = Math.max(dataFramesNeeded, MIN_FRAMES);
-  if (totalFrames > MAX_SAFE_FRAMES) totalFrames = MAX_SAFE_FRAMES;
-
-  onProgress(9, 'Поиск кодека...');
-
-  let codec = null;
-  for (const c of ['avc1.640029', 'avc1.4D401F', 'avc1.42E01E', 'avc1.42001F']) {
-    try {
-      if ((await VideoEncoder.isConfigSupported({
-        codec: c, width: W, height: H, bitrate: BITRATE, framerate: FPS
-      })).supported) {
-        codec = c; break;
-      }
-    } catch {}
+}
+async function findWorkingCodec(w, h, bitrate, fps) {
+  const candidates = ['avc1.42001f', 'avc1.420029', 'avc1.42E01E', 'avc1.4D401F', 'avc1.640029'];
+  const base = { width: w, height: h, bitrate, framerate: fps };
+  for (const codec of candidates) {
+    try { if ((await VideoEncoder.isConfigSupported({ ...base, codec })).supported) return codec; }
+    catch {}
   }
-  if (!codec) throw new Error('H.264 не поддерживается в этом браузере');
+  return null;
+}
+
+// --- Encode ---
+export async function encode(file, coverVideo, onProgress, cancelCheck) {
+  onProgress(2, 'Reading file...');
+  await yieldToUI();
+  const fileData = new Uint8Array(await file.arrayBuffer());
+  if (cancelCheck()) throw new Error('Cancelled');
+
+  onProgress(5, 'Building payload...');
+  await yieldToUI();
+  const checksum = crc32(fileData);
+  const headerJson = JSON.stringify({
+    n: file.name, s: fileData.length, v: FORMAT_VERSION, q: Q, r: REDUNDANCY, c: checksum, w: W, h: H, b: SBS
+  });
+  const payload = new PayloadBuilder(headerJson, fileData);
+  const dataFrames = Math.ceil(payload.length / EFFECTIVE_BYTES_PER_FRAME);
+  const totalFrames = Math.max(dataFrames, MIN_FRAMES);
+
+  onProgress(8, 'Initializing H.264...');
+  await yieldToUI();
+  const codecString = await findWorkingCodec(W, H, BITRATE, FPS);
+  if (!codecString) throw new Error('No supported H.264 profile. Try Chrome/Edge.');
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
     video: { codec: 'avc', width: W, height: H },
-    fastStart: 'in-memory'
+    fastStart: 'in-memory',
   });
-
+  let encError = null;
   const encoder = new VideoEncoder({
     output: (chunk, meta) => muxer.addVideoChunk(chunk, meta),
-    error: e => { throw e; }
+    error: e => { encError = e; },
   });
-
   encoder.configure({
-    codec,
-    width: W,
-    height: H,
-    bitrate: BITRATE,
-    framerate: FPS,
-    hardwareAcceleration: 'prefer-hardware',
-    bitrateMode: 'quantizer'
+    codec: codecString, width: W, height: H, bitrate: BITRATE, framerate: FPS,
+    hardwareAcceleration: 'prefer-software',
   });
 
-  const canvas = new OffscreenCanvas(W, H);
-  const ctx = canvas.getContext('2d', { willReadFrequently: true, alpha: false });
-
-  coverVideo.muted = true;
-  coverVideo.loop = true;
-  coverVideo.preload = 'auto';
-  await coverVideo.play().catch(() => {});
-
-  let frameCount = 0;
-  let lastProgressTime = performance.now();
-  const MAX_ENCODE_QUEUE = 12;
+  const cvs = document.createElement('canvas');
+  cvs.width = W; cvs.height = H;
+  const ctx = cvs.getContext('2d', { willReadFrequently: true });
+  const shrekDur = coverVideo.duration;
+  const startTime = performance.now();
+  let lastYield = startTime;
+  const MAX_QUEUE = 6;
 
   try {
-    while (frameCount < totalFrames) {
-      if (isCancelled()) throw new Error('Отменено пользователем');
-
-      if (encoder.encodeQueueSize >= MAX_ENCODE_QUEUE) {
-        await new Promise(r => encoder.addEventListener('dequeue', r, {once: true}));
-        await yieldToMain(2);
-        continue;
+    for (let i = 0; i < totalFrames; i++) {
+      if (cancelCheck() || encError) {
+        encoder.close();
+        throw new Error(cancelCheck() ? 'Cancelled' : encError.message);
       }
-
+      const shrekTime = (i / FPS) % shrekDur;
+      await seekVideo(coverVideo, shrekTime);
       ctx.drawImage(coverVideo, 0, 0, W, H);
-      const id = ctx.getImageData(0, 0, W, H);
-
-      const slice = payload.getSlice(frameCount);
-      embedFrame(id, slice);
-      ctx.putImageData(id, 0, 0);
-
-      const bitmap = await createImageBitmap(canvas);
-      const vf = new VideoFrame(bitmap, {
-        timestamp: frameCount * (1_000_000 / FPS),
-        duration: 1_000_000 / FPS
-      });
-
-      encoder.encode(vf, { keyFrame: frameCount % KEYFRAME_EVERY === 0 });
-
-      vf.close();
-      bitmap.close();
-
-      frameCount++;
-
-      const now = performance.now();
-      if (now - lastProgressTime > 180 || frameCount === totalFrames) {
-        const pct = 12 + Math.round((frameCount / totalFrames) * 83);
-        onProgress(Math.min(95, pct), `Кадр ${frameCount}/${totalFrames}`);
-        lastProgressTime = now;
-        await yieldToMain(0);
+      const imgData = ctx.getImageData(0, 0, W, H);
+      const slice = payload.getFrameSlice(i);
+      embedFrame(imgData, slice);
+      ctx.putImageData(imgData, 0, 0);
+      const frame = new VideoFrame(cvs, { timestamp: i * (1_000_000 / FPS), duration: 1_000_000 / FPS });
+      while (encoder.encodeQueueSize >= MAX_QUEUE) {
+        await new Promise(r => encoder.addEventListener('dequeue', r, { once: true }));
+        if (cancelCheck() || encError) { frame.close(); throw new Error(cancelCheck() ? 'Cancelled' : encError.message); }
       }
-
-      if (frameCount % 3 === 0) await yieldToMain(6);
+      encoder.encode(frame, { keyFrame: i % KEYFRAME_INTERVAL === 0 });
+      frame.close();
+      if (performance.now() - lastYield > 30 || i === totalFrames - 1) {
+        const pct = 10 + (i / totalFrames) * 85;
+        const elapsed = (performance.now() - startTime) / 1000;
+        const fps = (i + 1) / elapsed;
+        const eta = (totalFrames - i - 1) / fps;
+        onProgress(pct, `Frame ${i + 1}/${totalFrames} (ETA: ${fmtTime(eta)})`);
+        await yieldToUI();
+        lastYield = performance.now();
+      }
     }
 
-    onProgress(96, 'Финализация...');
+    onProgress(96, 'Finalizing video...');
     await encoder.flush();
     encoder.close();
     muxer.finalize();
-
-    const buffer = muxer.target.buffer;
+    if (encError) throw encError;
+    const mp4Buf = muxer.target.buffer;
     return {
-      blob: new Blob([buffer], {type: 'video/mp4'}),
-      totalFrames,
-      dataFrames: dataFramesNeeded,
-      checksum,
-      fileSize: fileBytes.length,
-      videoSize: buffer.byteLength,
-      duration: totalFrames / FPS
+      blob: new Blob([mp4Buf], { type: 'video/mp4' }),
+      totalFrames, dataFrames, checksum, fileSize: fileData.length, videoSize: mp4Buf.byteLength, duration: totalFrames / FPS
     };
-  } finally {
-    coverVideo.pause();
-    coverVideo.currentTime = 0;
+  } catch (e) {
+    try { encoder.close(); } catch {}
+    throw e;
   }
 }
 
-// decode функция осталась почти без изменений — можешь оставить как в твоём варианте
-// или использовать версию из предыдущего ответа
+// --- Decode ---
+export async function decode(file, onProgress, cancelCheck) {
+  onProgress(1, 'Loading video...');
+  await yieldToUI();
+  const video = document.createElement('video');
+  video.muted = true; video.playsInline = true; video.preload = 'auto';
+  const videoUrl = URL.createObjectURL(file);
+  try {
+    video.src = videoUrl;
+    await new Promise((res, rej) => {
+      video.onloadedmetadata = res;
+      video.onerror = () => rej(new Error('Video load failed'));
+      setTimeout(() => rej(new Error('Video load timeout')), 30000);
+    });
+    await new Promise(r => { video.oncanplaythrough = r; video.load(); setTimeout(r, 10000); });
 
-// ... (decode код можно взять из твоего последнего сообщения — он вполне рабочий)
+    const canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const estFrames = Math.max(1, Math.ceil(video.duration * FPS));
+    onProgress(3, `Scanning ${estFrames} frames...`);
+
+    let outputBuffer = null, outputOffset = 0, headerParsed = false, totalNeeded = 0, parsedHeader = null;
+    const tempSize = Math.min(estFrames * EFFECTIVE_BYTES_PER_FRAME, 2_000_000);
+    const tempBuffer = new Uint8Array(tempSize);
+    let tempOffset = 0;
+    const startTime = performance.now();
+    let lastYield = startTime;
+
+    for (let i = 0; i < estFrames; i++) {
+      if (cancelCheck()) throw new Error('Cancelled');
+      const t = i / FPS;
+      if (t > video.duration + 1) break;
+      await seekVideo(video, t);
+      await yieldToUI();
+      ctx.drawImage(video, 0, 0, W, H);
+      const imgData = ctx.getImageData(0, 0, W, H);
+      const frameBytes = extractFrame(imgData);
+
+      if (!headerParsed) {
+        const copyLen = Math.min(EFFECTIVE_BYTES_PER_FRAME, tempBuffer.length - tempOffset);
+        if (copyLen > 0) tempBuffer.set(frameBytes.subarray(0, copyLen), tempOffset);
+        tempOffset += copyLen;
+        if (tempOffset >= 9) {
+          if (!MAGIC.every((v, j) => tempBuffer[j] === v)) throw new Error('Not a SwampCrypt v4 video');
+          const version = tempBuffer[4];
+          if (version !== FORMAT_VERSION) throw new Error(`Version mismatch: found v${version}, need v${FORMAT_VERSION}`);
+          const hl = (tempBuffer[5]<<24)|(tempBuffer[6]<<16)|(tempBuffer[7]<<8)|tempBuffer[8];
+          if (hl < 10 || hl > 10000) throw new Error(`Bad header length: ${hl}`);
+          const headerEnd = 9 + hl + 4;
+          if (tempOffset >= headerEnd) {
+            const headerBytes = tempBuffer.slice(9, 9 + hl);
+            const storedCrc = ((tempBuffer[9+hl]<<24)|(tempBuffer[9+hl+1]<<16)|(tempBuffer[9+hl+2]<<8)|tempBuffer[9+hl+3]) >>> 0;
+            if (storedCrc !== crc32(headerBytes)) throw new Error('Header CRC mismatch');
+            const hdrJson = deobfuscateHeader(headerBytes);
+            parsedHeader = JSON.parse(hdrJson);
+            if (!parsedHeader.n || !parsedHeader.s) throw new Error('Header missing fields');
+            totalNeeded = headerEnd + parsedHeader.s;
+            outputBuffer = new Uint8Array(totalNeeded);
+            outputBuffer.set(tempBuffer.subarray(0, Math.min(tempOffset, totalNeeded)));
+            outputOffset = Math.min(tempOffset, totalNeeded);
+            headerParsed = true;
+          }
+        }
+      } else {
+        const remaining = totalNeeded - outputOffset;
+        if (remaining > 0) {
+          const copy = Math.min(EFFECTIVE_BYTES_PER_FRAME, remaining);
+          outputBuffer.set(frameBytes.subarray(0, copy), outputOffset);
+          outputOffset += copy;
+        }
+        if (outputOffset >= totalNeeded) break;
+      }
+
+      if (performance.now() - lastYield > 50 || i === estFrames - 1) {
+        const pct = headerParsed ? 20 + (outputOffset / totalNeeded) * 70 : 5 + (i / estFrames) * 15;
+        const elapsed = (performance.now() - startTime) / 1000;
+        const fps = (i + 1) / elapsed;
+        const framesLeft = headerParsed ? Math.ceil((totalNeeded - outputOffset) / EFFECTIVE_BYTES_PER_FRAME) : (estFrames - i - 1);
+        onProgress(pct, headerParsed ? `Extracting ${fmtSize(outputOffset)}/${fmtSize(totalNeeded)}` : `Scanning frame ${i + 1}`);
+        await yieldToUI();
+        lastYield = performance.now();
+      }
+    }
+
+    if (!headerParsed) throw new Error('No valid SwampCrypt header found');
+    if (outputOffset < totalNeeded) throw new Error(`Incomplete: got ${fmtSize(outputOffset)}, expected ${fmtSize(totalNeeded)}`);
+
+    onProgress(96, 'Verifying...');
+    await yieldToUI();
+    const hl = (outputBuffer[5]<<24)|(outputBuffer[6]<<16)|(outputBuffer[7]<<8)|outputBuffer[8];
+    const fileStart = 9 + hl + 4;
+    const extractedFile = outputBuffer.slice(fileStart, fileStart + parsedHeader.s);
+    let integrityOk = true, integrityMsg = '';
+    if (parsedHeader.c !== undefined) {
+      const gotCrc = crc32(extractedFile);
+      integrityOk = gotCrc === parsedHeader.c;
+      integrityMsg = integrityOk ? 'CRC OK' : `CRC error: expected ${parsedHeader.c.toString(16).toUpperCase()}, got ${gotCrc.toString(16).toUpperCase()}`;
+    }
+    return { data: extractedFile, filename: parsedHeader.n, size: parsedHeader.s, integrityOk, integrityMsg };
+  } finally {
+    URL.revokeObjectURL(videoUrl);
+  }
+}
