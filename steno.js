@@ -1,7 +1,7 @@
 import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm';
 
-const W = 960;
-const H = 540;
+const W = 854;
+const H = 480;
 const FPS = 30;
 const BITRATE = 1_500_000;
 const SBS = 32;                  // ← было 16 → сильно быстрее
