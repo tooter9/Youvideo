@@ -113,7 +113,7 @@ a{color:var(--accent);text-decoration:none}
 <body>
 <div class="wrap">
 <div class="header">
-<h1>File2Video</h1>
+<h1>File4YouTube</h1>
 <p>encode any file into a real video</p>
 </div>
 
@@ -132,7 +132,7 @@ a{color:var(--accent);text-decoration:none}
 <div class="card">
 <div id="encDropZone" class="drop-zone">
 <div class="icon">&#128196;</div>
-<div class="label">Drop file here or click to select</div>
+<div class="label">Drop file here</div>
 <div class="sub">Any file type supported</div>
 </div>
 <input type="file" id="encFileInput" style="display:none">
@@ -175,8 +175,8 @@ a{color:var(--accent);text-decoration:none}
 <div id="sizeWarn" class="size-warn"></div>
 </div>
 
-<button id="encodeBtn" class="btn btn-primary" disabled>Encode to H.264 Video</button>
-<button id="encCancelBtn" class="btn btn-cancel" style="display:none">Cancel Encoding</button>
+<button id="encodeBtn" class="btn btn-primary" disabled>File to Video</button>
+<button id="encCancelBtn" class="btn btn-cancel" style="display:none">Cancel</button>
 
 <div id="encProgress" class="progress-wrap">
 <div class="progress-bar-bg"><div id="encBar" class="progress-bar"></div></div>
@@ -209,7 +209,7 @@ a{color:var(--accent);text-decoration:none}
 <div class="card">
 <div id="decDropZone" class="drop-zone">
 <div class="icon">&#127916;</div>
-<div class="label">Drop encoded video here</div>
+<div class="label">Drop video here</div>
 <div class="sub">MP4/WebM video encoded by this tool</div>
 </div>
 <input type="file" id="decFileInput" accept="video/*" style="display:none">
@@ -223,7 +223,7 @@ a{color:var(--accent);text-decoration:none}
 </div>
 </div>
 
-<button id="decodeBtn" class="btn btn-primary" disabled>Decode Video to File</button>
+<button id="decodeBtn" class="btn btn-primary" disabled>Video to File</button>
 <button id="decCancelBtn" class="btn btn-cancel" style="display:none">Cancel Decoding</button>
 
 <div id="decProgress" class="progress-wrap">
