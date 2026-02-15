@@ -101,7 +101,7 @@ a{color:var(--accent);text-decoration:none}
 <div class="wrap">
 <div class="header">
 <h1>SWAMPCRYPT</h1>
-<p class="subtitle">// steganography_engine v3.0</p>
+<p class="subtitle">// steganography_engine v4.0</p>
 <p class="shrek-quote">"Ogres have layers. Data has layers." — Shrek</p>
 </div>
 
@@ -157,10 +157,10 @@ a{color:var(--accent);text-decoration:none}
 <div id="encSpecs" class="specs" style="display:none">
 <div class="spec"><div class="spec-label">Resolution</div><div id="specRes" class="spec-value">1280 x 720</div></div>
 <div class="spec"><div class="spec-label">Codec</div><div class="spec-value">H.264 / AVC</div></div>
-<div class="spec"><div class="spec-label">Method</div><div class="spec-value">QIM + ECC</div></div>
+<div class="spec"><div class="spec-label">Method</div><div class="spec-value">QIM x3 + Interleave</div></div>
 <div class="spec"><div class="spec-label">Frames</div><div id="specFrames" class="spec-value">&mdash;</div></div>
 <div class="spec"><div class="spec-label">Capacity</div><div id="specCapacity" class="spec-value">&mdash;</div></div>
-<div class="spec"><div class="spec-label">Bitrate</div><div class="spec-value">8 Mbps</div></div>
+<div class="spec"><div class="spec-label">Bitrate</div><div class="spec-value">25 Mbps</div></div>
 </div>
 
 <div id="encDlArea" class="dl-area">
@@ -173,7 +173,7 @@ a{color:var(--accent);text-decoration:none}
 <div id="decDropZone" class="drop-zone">
 <div class="icon">&#127916;</div>
 <div class="label">Drop encoded video here</div>
-<div class="sub">Video created by SwampCrypt</div>
+<div class="sub">Video created by SwampCrypt v4</div>
 </div>
 <input type="file" id="decFileInput" accept="video/*" style="display:none">
 <div id="decFileInfo" class="file-info" style="display:none">
@@ -212,20 +212,9 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <script type="module">
-import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm';
+import { encode, decode, CONFIG, fmtSize, fmtTime, estimateOutput } from './steno.js';
 
-const W = 1280, H = 720, FPS = 30, BITRATE = 8_000_000;
 const COVER_URL = 'Shrek.mp4';
-const SBS = 4;
-const SCOLS = W / SBS, SROWS = H / SBS;
-const BPF = SCOLS * SROWS;
-const BYTES_PER_FRAME = BPF >>> 3;
-const Q = 48;
-const REDUNDANCY = 3;
-const EFFECTIVE_BPF = Math.floor(BPF / REDUNDANCY);
-const EFFECTIVE_BYTES_PER_FRAME = EFFECTIVE_BPF >>> 3;
-const MAGIC = [0x53, 0x57, 0x4D, 0x50];
-const MIN_FRAMES = 90;
 
 let encFile = null, encBlob = null, encBlobUrl = null;
 let decFile = null, decResult = null, decBlobUrl = null;
@@ -238,26 +227,6 @@ if (!('VideoEncoder' in window)) {
 }
 
 const $ = id => document.getElementById(id);
-
-function crc32(data) {
-  let table = crc32.table;
-  if (!table) {
-    table = new Uint32Array(256);
-    for (let i = 0; i < 256; i++) {
-      let c = i;
-      for (let j = 0; j < 8; j++) {
-        c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-      }
-      table[i] = c;
-    }
-    crc32.table = table;
-  }
-  let crc = 0xFFFFFFFF;
-  for (let i = 0; i < data.length; i++) {
-    crc = table[(crc ^ data[i]) & 0xFF] ^ (crc >>> 8);
-  }
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
 
 (function initMatrix() {
   const c = $('matrixBg'), ctx = c.getContext('2d');
@@ -279,201 +248,6 @@ function crc32(data) {
   setInterval(draw, 80);
   window.addEventListener('resize', () => { c.width = window.innerWidth; c.height = window.innerHeight; });
 })();
-
-function qimEmbed(val, bit) {
-  const half = Q >>> 1;
-  let t;
-  if (bit === 0) {
-    t = Math.round(val / Q) * Q;
-  } else {
-    t = Math.round((val - half) / Q) * Q + half;
-  }
-  return Math.max(0, Math.min(255, t));
-}
-
-function qimExtract(val) {
-  const half = Q >>> 1;
-  const d0 = Math.abs(val - Math.round(val / Q) * Q);
-  const d1 = Math.abs(val - (Math.round((val - half) / Q) * Q + half));
-  return d0 < d1 ? 0 : 1;
-}
-
-function interleaveIndices(totalBits) {
-  const indices = new Uint32Array(totalBits);
-  for (let i = 0; i < totalBits; i++) indices[i] = i;
-  let seed = 0x5F3759DF;
-  for (let i = totalBits - 1; i > 0; i--) {
-    seed = (seed * 1103515245 + 12345) & 0x7FFFFFFF;
-    const j = seed % (i + 1);
-    const tmp = indices[i];
-    indices[i] = indices[j];
-    indices[j] = tmp;
-  }
-  return indices;
-}
-
-function embedFrame(imgData, slice) {
-  const d = imgData.data;
-  const totalBits = BPF;
-  const logicalBits = EFFECTIVE_BPF;
-
-  const dataBits = new Uint8Array(logicalBits);
-  if (slice) {
-    for (let i = 0; i < logicalBits; i++) {
-      const byteI = i >>> 3;
-      const bitP = 7 - (i & 7);
-      if (byteI < slice.length) {
-        dataBits[i] = (slice[byteI] >>> bitP) & 1;
-      }
-    }
-  }
-
-  const expandedBits = new Uint8Array(totalBits);
-  for (let i = 0; i < logicalBits; i++) {
-    for (let r = 0; r < REDUNDANCY; r++) {
-      expandedBits[i * REDUNDANCY + r] = dataBits[i];
-    }
-  }
-
-  const interleaveMap = interleaveIndices(totalBits);
-  const finalBits = new Uint8Array(totalBits);
-  for (let i = 0; i < totalBits; i++) {
-    finalBits[interleaveMap[i]] = expandedBits[i];
-  }
-
-  let bi = 0;
-  for (let by = 0; by < SROWS; by++) {
-    const sy = by * SBS;
-    for (let bx = 0; bx < SCOLS; bx++) {
-      const sx = bx * SBS;
-      const bit = finalBits[bi];
-      let sumY = 0;
-      for (let py = 0; py < SBS; py++) {
-        for (let px = 0; px < SBS; px++) {
-          const off = ((sy + py) * W + sx + px) << 2;
-          sumY += 0.299 * d[off] + 0.587 * d[off + 1] + 0.114 * d[off + 2];
-        }
-      }
-      const avgY = sumY / (SBS * SBS);
-      const tgt = qimEmbed(avgY, bit);
-      const delta = tgt - avgY;
-      for (let py = 0; py < SBS; py++) {
-        for (let px = 0; px < SBS; px++) {
-          const off = ((sy + py) * W + sx + px) << 2;
-          d[off] = Math.max(0, Math.min(255, Math.round(d[off] + delta)));
-          d[off + 1] = Math.max(0, Math.min(255, Math.round(d[off + 1] + delta)));
-          d[off + 2] = Math.max(0, Math.min(255, Math.round(d[off + 2] + delta)));
-        }
-      }
-      bi++;
-    }
-  }
-}
-
-function extractFrame(imgData) {
-  const d = imgData.data;
-  const totalBits = BPF;
-
-  const rawBits = new Uint8Array(totalBits);
-  let bi = 0;
-  for (let by = 0; by < SROWS; by++) {
-    const sy = by * SBS;
-    for (let bx = 0; bx < SCOLS; bx++) {
-      const sx = bx * SBS;
-      let sumY = 0;
-      for (let py = 0; py < SBS; py++) {
-        for (let px = 0; px < SBS; px++) {
-          const off = ((sy + py) * W + sx + px) << 2;
-          sumY += 0.299 * d[off] + 0.587 * d[off + 1] + 0.114 * d[off + 2];
-        }
-      }
-      const avgY = sumY / (SBS * SBS);
-      rawBits[bi] = qimExtract(avgY);
-      bi++;
-    }
-  }
-
-  const interleaveMap = interleaveIndices(totalBits);
-  const deinterleavedBits = new Uint8Array(totalBits);
-  for (let i = 0; i < totalBits; i++) {
-    deinterleavedBits[i] = rawBits[interleaveMap[i]];
-  }
-
-  const logicalBits = EFFECTIVE_BPF;
-  const out = new Uint8Array(EFFECTIVE_BYTES_PER_FRAME);
-  for (let i = 0; i < logicalBits; i++) {
-    let votes = 0;
-    for (let r = 0; r < REDUNDANCY; r++) {
-      votes += deinterleavedBits[i * REDUNDANCY + r];
-    }
-    const bit = (votes > REDUNDANCY / 2) ? 1 : 0;
-    if (bit) out[i >>> 3] |= (1 << (7 - (i & 7)));
-  }
-  return out;
-}
-
-class PayloadView {
-  constructor(headerBytes, fileData) {
-    this.fileData = fileData;
-    const hl = headerBytes.length;
-    this.prefix = new Uint8Array(8 + hl);
-    this.prefix[0] = MAGIC[0]; this.prefix[1] = MAGIC[1];
-    this.prefix[2] = MAGIC[2]; this.prefix[3] = MAGIC[3];
-    this.prefix[4] = (hl >>> 24) & 0xFF;
-    this.prefix[5] = (hl >>> 16) & 0xFF;
-    this.prefix[6] = (hl >>> 8) & 0xFF;
-    this.prefix[7] = hl & 0xFF;
-    this.prefix.set(headerBytes, 8);
-    this.prefixLen = this.prefix.length;
-    this.length = this.prefixLen + fileData.length;
-  }
-  getFrameSlice(frameIdx) {
-    const bpf = EFFECTIVE_BYTES_PER_FRAME;
-    const offset = frameIdx * bpf;
-    const end = Math.min(offset + bpf, this.length);
-    if (end <= offset) return null;
-    if (offset >= this.prefixLen) return this.fileData.subarray(offset - this.prefixLen, end - this.prefixLen);
-    if (end <= this.prefixLen) return this.prefix.subarray(offset, end);
-    const result = new Uint8Array(end - offset);
-    result.set(this.prefix.subarray(offset, this.prefixLen));
-    result.set(this.fileData.subarray(0, end - this.prefixLen), this.prefixLen - offset);
-    return result;
-  }
-}
-
-function fmtSize(b) {
-  if (b < 1024) return b + ' B';
-  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
-  if (b < 1073741824) return (b / 1048576).toFixed(2) + ' MB';
-  return (b / 1073741824).toFixed(2) + ' GB';
-}
-function fmtTime(sec) {
-  if (sec < 60) return Math.round(sec) + 's';
-  return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
-}
-
-function obfuscateHeader(json) {
-  const b = new TextEncoder().encode(json);
-  const key = new Uint8Array([0x53,0x48,0x52,0x45,0x4B,0x21,0x4F,0x47,0x52,0x45,0x53,0x57,0x41,0x4D,0x50,0x21]);
-  const o = new Uint8Array(b.length);
-  for (let i = 0; i < b.length; i++) o[i] = b[i] ^ key[i % key.length];
-  return o;
-}
-function deobfuscateHeader(o) {
-  const key = new Uint8Array([0x53,0x48,0x52,0x45,0x4B,0x21,0x4F,0x47,0x52,0x45,0x53,0x57,0x41,0x4D,0x50,0x21]);
-  const b = new Uint8Array(o.length);
-  for (let i = 0; i < o.length; i++) b[i] = o[i] ^ key[i % key.length];
-  return new TextDecoder().decode(b);
-}
-
-function estimateOutput(fileSize) {
-  const hdrEst = 200;
-  const payloadSize = 8 + hdrEst + fileSize;
-  const dataFrames = Math.ceil(payloadSize / EFFECTIVE_BYTES_PER_FRAME);
-  const totalFrames = Math.max(dataFrames, MIN_FRAMES);
-  const duration = totalFrames / FPS;
-  return { est: Math.ceil(duration * BITRATE / 8), frames: totalFrames, duration, dataFrames };
-}
 
 function updateEstimate() {
   const el = $('estInfo'), warnEl = $('sizeWarn');
@@ -524,13 +298,16 @@ function setupDrop(zoneId, inputId, onFile) {
   zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag'); if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]); });
   inp.addEventListener('change', () => { if (inp.files[0]) onFile(inp.files[0]); inp.value = ''; });
 }
+
 function showStatus(id, type, msg) {
   const el = $(id);
   el.className = 'status show ' + type;
   const icons = { info: '&#9432;', ok: '&#10003;', err: '&#10007;', warn: '&#9888;' };
   el.innerHTML = '<span class="s-icon">' + (icons[type] || '') + '</span><span>' + msg + '</span>';
 }
+
 function hideStatus(id) { $(id).className = 'status'; }
+
 function setProgress(barId, pctId, statusId, pct, text) {
   $(barId).style.width = Math.min(100, pct) + '%';
   $(pctId).textContent = Math.round(pct) + '%';
@@ -596,142 +373,31 @@ $('encodeBtn').addEventListener('click', async () => {
   resetEncUI();
   $('encProgress').classList.add('show');
   $('encCancelBtn').style.display = '';
-  let encoder = null;
 
   try {
-    setProgress('encBar', 'encPercent', 'encStatus', 1, 'Loading cover video...');
-    await new Promise(r => setTimeout(r, 0));
-
     if (!coverVideo || !coverVideoReady) throw new Error('Cover video not loaded. Place Shrek.mp4 in same directory.');
-    const shrekDur = coverVideo.duration;
 
-    const cvs = document.createElement('canvas');
-    cvs.width = W; cvs.height = H;
-    const cctx = cvs.getContext('2d', { willReadFrequently: true });
-
-    setProgress('encBar', 'encPercent', 'encStatus', 3, 'Reading file...');
-    await new Promise(r => setTimeout(r, 0));
-
-    const fileData = new Uint8Array(await encFile.arrayBuffer());
-    if (encCancelled) throw new Error('Cancelled');
-
-    setProgress('encBar', 'encPercent', 'encStatus', 6, 'Preparing payload...');
-    await new Promise(r => setTimeout(r, 0));
-
-    const checksum = crc32(fileData);
-    const header = JSON.stringify({
-      n: encFile.name,
-      s: fileData.length,
-      v: 4,
-      q: Q,
-      r: REDUNDANCY,
-      c: checksum,
-      w: W,
-      h: H,
-      b: SBS
-    });
-    const headerBytes = obfuscateHeader(header);
-    const payload = new PayloadView(headerBytes, fileData);
-    const dataFrames = Math.ceil(payload.length / EFFECTIVE_BYTES_PER_FRAME);
-    const totalFrames = Math.max(dataFrames, MIN_FRAMES);
-
-    $('specFrames').textContent = totalFrames + (totalFrames > dataFrames ? ' (' + dataFrames + ' data + ' + (totalFrames - dataFrames) + ' pad)' : '');
-    $('specCapacity').textContent = fmtSize(EFFECTIVE_BYTES_PER_FRAME) + '/frame';
+    const info = estimateOutput(encFile.size);
+    $('specFrames').textContent = info.frames + (info.frames > info.dataFrames ? ' (' + info.dataFrames + ' data + ' + (info.frames - info.dataFrames) + ' pad)' : '');
+    $('specCapacity').textContent = fmtSize(CONFIG.EFFECTIVE_BYTES_PER_FRAME) + '/frame';
     $('encSpecs').style.display = 'grid';
 
-    setProgress('encBar', 'encPercent', 'encStatus', 8, 'Initializing H.264...');
-    await new Promise(r => setTimeout(r, 0));
+    const result = await encode(
+      encFile,
+      coverVideo,
+      (pct, text) => setProgress('encBar', 'encPercent', 'encStatus', pct, text),
+      () => encCancelled
+    );
 
-    const codecString = 'avc1.42001f';
-    const support = await VideoEncoder.isConfigSupported({
-      codec: codecString, width: W, height: H, bitrate: BITRATE, framerate: FPS,
-    });
-    if (!support.supported) throw new Error('H.264 not supported in this browser.');
-
-    const muxer = new Muxer({
-      target: new ArrayBufferTarget(),
-      video: { codec: 'avc', width: W, height: H },
-      fastStart: 'in-memory',
-    });
-
-    let encError = null;
-    encoder = new VideoEncoder({
-      output: (chunk, meta) => { muxer.addVideoChunk(chunk, meta); },
-      error: e => { encError = e; },
-    });
-
-    encoder.configure({
-      codec: codecString, width: W, height: H,
-      bitrate: BITRATE, framerate: FPS, latencyMode: 'quality',
-    });
-
-    const MAX_QUEUE = 8;
-    const startTime = performance.now();
-    let lastYieldTime = startTime;
-
-    for (let i = 0; i < totalFrames; i++) {
-      if (encCancelled) throw new Error('Cancelled');
-      if (encError) throw encError;
-
-      const shrekTime = (i / FPS) % shrekDur;
-      coverVideo.currentTime = shrekTime;
-      await new Promise(r => { coverVideo.addEventListener('seeked', r, { once: true }); });
-
-      cctx.drawImage(coverVideo, 0, 0, W, H);
-      const imgData = cctx.getImageData(0, 0, W, H);
-
-      const slice = payload.getFrameSlice(i);
-      embedFrame(imgData, slice);
-
-      cctx.putImageData(imgData, 0, 0);
-
-      const frame = new VideoFrame(cvs, {
-        timestamp: i * (1_000_000 / FPS),
-        duration: 1_000_000 / FPS,
-      });
-
-      while (encoder.encodeQueueSize >= MAX_QUEUE) {
-        await new Promise(resolve => { encoder.addEventListener('dequeue', resolve, { once: true }); });
-        if (encCancelled) { frame.close(); throw new Error('Cancelled'); }
-        if (encError) { frame.close(); throw encError; }
-      }
-
-      encoder.encode(frame, { keyFrame: true });
-      frame.close();
-
-      const now = performance.now();
-      if (now - lastYieldTime > 30 || i === totalFrames - 1) {
-        const pct = 10 + (i / totalFrames) * 85;
-        const elapsed = (now - startTime) / 1000;
-        const fps = (i + 1) / elapsed;
-        const remaining = (totalFrames - i - 1) / fps;
-        const etaStr = i > 10 ? ' (ETA: ' + fmtTime(remaining) + ')' : '';
-        setProgress('encBar', 'encPercent', 'encStatus', pct, 'Frame ' + (i + 1) + '/' + totalFrames + etaStr);
-        await new Promise(r => setTimeout(r, 0));
-        lastYieldTime = performance.now();
-      }
-    }
-
-    setProgress('encBar', 'encPercent', 'encStatus', 96, 'Flushing encoder...');
-    await new Promise(r => setTimeout(r, 0));
-
-    await encoder.flush();
-    encoder.close();
-    encoder = null;
-    muxer.finalize();
-
-    if (encError) throw encError;
-
-    const mp4Buf = muxer.target.buffer;
-    encBlob = new Blob([mp4Buf], { type: 'video/mp4' });
-
+    encBlob = result.blob;
     setProgress('encBar', 'encPercent', 'encStatus', 100, 'Done!');
     showStatus('encStatusMsg', 'ok',
-      'Data hidden in the swamp! ' + totalFrames + ' frames, ' + (totalFrames / FPS).toFixed(1) + 's, ' + fmtSize(mp4Buf.byteLength) + '. Video looks normal. CRC32: ' + checksum.toString(16).toUpperCase());
+      'Data hidden in the swamp! ' + result.totalFrames + ' frames, ' +
+      result.duration.toFixed(1) + 's, ' + fmtSize(result.videoSize) +
+      '. CRC32: ' + result.checksum.toString(16).toUpperCase());
     $('encDlArea').classList.add('show');
 
   } catch (e) {
-    if (encoder) { try { encoder.close(); } catch (_) { } }
     if (e.message === 'Cancelled') {
       showStatus('encStatusMsg', 'warn', 'Encoding cancelled.');
     } else {
@@ -793,140 +459,23 @@ $('decodeBtn').addEventListener('click', async () => {
   hideStatus('decStatusMsg');
   cleanupDecBlob();
 
-  let videoUrl = null;
-
   try {
-    setProgress('decBar', 'decPercent', 'decStatus', 1, 'Loading video...');
-    await new Promise(r => setTimeout(r, 0));
-
-    const video = document.createElement('video');
-    video.muted = true; video.playsInline = true; video.preload = 'auto';
-    videoUrl = URL.createObjectURL(decFile);
-    video.src = videoUrl;
-
-    await new Promise((res, rej) => {
-      video.onloadedmetadata = res;
-      video.onerror = () => rej(new Error('Failed to load video.'));
-    });
-    await new Promise(r => { video.oncanplaythrough = r; video.load(); });
-
-    const canvas = document.createElement('canvas');
-    canvas.width = W; canvas.height = H;
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-    const estFrames = Math.max(1, Math.round(video.duration * FPS));
-    setProgress('decBar', 'decPercent', 'decStatus', 3, 'Extracting from ' + estFrames + ' frames...');
-
-    let outputBuffer = null;
-    let outputOffset = 0;
-    let headerParsed = false;
-    let totalNeeded = 0;
-    let parsedHeader = null;
-    const maxTempSize = Math.min(estFrames * EFFECTIVE_BYTES_PER_FRAME, 500000);
-    const tempBuffer = new Uint8Array(maxTempSize);
-    let tempOffset = 0;
-
-    const startTime = performance.now();
-    let lastYieldTime = startTime;
-
-    for (let i = 0; i < estFrames; i++) {
-      if (decCancelled) throw new Error('Cancelled');
-
-      const t = i / FPS;
-      if (t > video.duration + 0.5) break;
-
-      video.currentTime = t;
-      await new Promise(r => { video.addEventListener('seeked', r, { once: true }); });
-
-      ctx.drawImage(video, 0, 0, W, H);
-      const imgData = ctx.getImageData(0, 0, W, H);
-      const frameBytes = extractFrame(imgData);
-
-      if (!headerParsed) {
-        const copyLen = Math.min(EFFECTIVE_BYTES_PER_FRAME, tempBuffer.length - tempOffset);
-        if (copyLen > 0) { tempBuffer.set(frameBytes.subarray(0, copyLen), tempOffset); tempOffset += copyLen; }
-
-        if (tempOffset >= 8) {
-          if (tempBuffer[0] !== MAGIC[0] || tempBuffer[1] !== MAGIC[1] ||
-            tempBuffer[2] !== MAGIC[2] || tempBuffer[3] !== MAGIC[3]) {
-            throw new Error('No hidden data found. This video was not created by SwampCrypt.');
-          }
-          const hl = (tempBuffer[4] << 24) | (tempBuffer[5] << 16) | (tempBuffer[6] << 8) | tempBuffer[7];
-          if (hl > 10000 || hl < 10) throw new Error('Invalid header (' + hl + '). Video may be corrupted.');
-
-          if (tempOffset >= 8 + hl) {
-            try {
-              const hdrJson = deobfuscateHeader(tempBuffer.slice(8, 8 + hl));
-              parsedHeader = JSON.parse(hdrJson);
-              if (!parsedHeader.n || !parsedHeader.s) throw new Error('Invalid header');
-              parsedHeader.name = parsedHeader.n;
-              parsedHeader.size = parsedHeader.s;
-              totalNeeded = 8 + hl + parsedHeader.size;
-              outputBuffer = new Uint8Array(totalNeeded);
-              const toCopy = Math.min(tempOffset, totalNeeded);
-              outputBuffer.set(tempBuffer.subarray(0, toCopy));
-              outputOffset = toCopy;
-              headerParsed = true;
-            } catch (e) {
-              throw new Error('Failed to parse header: ' + e.message);
-            }
-          }
-        }
-      } else {
-        const remaining = totalNeeded - outputOffset;
-        if (remaining > 0) {
-          const toCopy = Math.min(EFFECTIVE_BYTES_PER_FRAME, remaining);
-          outputBuffer.set(frameBytes.subarray(0, toCopy), outputOffset);
-          outputOffset += toCopy;
-        }
-        if (outputOffset >= totalNeeded) {
-          setProgress('decBar', 'decPercent', 'decStatus', 90, 'All data extracted.');
-          break;
-        }
-      }
-
-      const now = performance.now();
-      if (now - lastYieldTime > 50 || i === estFrames - 1) {
-        const pct = 5 + ((i + 1) / estFrames) * 80;
-        const elapsed = (now - startTime) / 1000;
-        const fps = (i + 1) / elapsed;
-        const framesLeft = headerParsed ? Math.ceil((totalNeeded - outputOffset) / EFFECTIVE_BYTES_PER_FRAME) : (estFrames - i - 1);
-        const etaStr = i > 3 ? ' (ETA: ' + fmtTime(framesLeft / fps) + ')' : '';
-        setProgress('decBar', 'decPercent', 'decStatus', pct, 'Frame ' + (i + 1) + '/' + estFrames + etaStr);
-        await new Promise(r => setTimeout(r, 0));
-        lastYieldTime = performance.now();
-      }
-    }
-
-    if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
-
-    if (!headerParsed) throw new Error('No hidden data found. Use a video created by SwampCrypt v3+.');
-    if (outputOffset < totalNeeded) throw new Error('Incomplete data. Expected ' + totalNeeded + ' bytes, got ' + outputOffset + '.');
-
-    setProgress('decBar', 'decPercent', 'decStatus', 95, 'Verifying integrity...');
-    await new Promise(r => setTimeout(r, 0));
-
-    const hl = (outputBuffer[4] << 24) | (outputBuffer[5] << 16) | (outputBuffer[6] << 8) | outputBuffer[7];
-    const fileData = outputBuffer.slice(8 + hl, 8 + hl + parsedHeader.size);
-
-    let integrityMsg = '';
-    if (parsedHeader.c !== undefined) {
-      const extractedCrc = crc32(fileData);
-      if (extractedCrc === parsedHeader.c) {
-        integrityMsg = ' CRC32 verified OK.';
-      } else {
-        integrityMsg = ' WARNING: CRC32 mismatch (expected ' + parsedHeader.c.toString(16).toUpperCase() + ', got ' + extractedCrc.toString(16).toUpperCase() + '). File may have minor corruption from video compression.';
-      }
-    }
+    const result = await decode(
+      decFile,
+      (pct, text) => setProgress('decBar', 'decPercent', 'decStatus', pct, text),
+      () => decCancelled
+    );
 
     setProgress('decBar', 'decPercent', 'decStatus', 100, 'Done!');
-    showStatus('decStatusMsg', 'ok', 'File "' + parsedHeader.name + '" (' + fmtSize(parsedHeader.size) + ') extracted from the swamp!' + integrityMsg);
 
-    decResult = { data: fileData, filename: parsedHeader.name };
+    const statusType = result.integrityOk ? 'ok' : 'warn';
+    showStatus('decStatusMsg', statusType,
+      'File "' + result.filename + '" (' + fmtSize(result.size) + ') extracted from the swamp! ' + result.integrityMsg);
+
+    decResult = result;
     $('decDlArea').classList.add('show');
 
   } catch (e) {
-    if (videoUrl) { URL.revokeObjectURL(videoUrl); videoUrl = null; }
     if (e.message === 'Cancelled') {
       showStatus('decStatusMsg', 'warn', 'Decoding cancelled.');
     } else {
