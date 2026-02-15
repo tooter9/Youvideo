@@ -1,9 +1,9 @@
 import { Muxer, ArrayBufferTarget } from 'https://cdn.jsdelivr.net/npm/mp4-muxer@5/+esm';
 
 const W = 1280, H = 720, FPS = 30;
-const BITRATE = 25_000_000;
-const SBS = 8;
-const Q = 80;
+const BITRATE = 2_000_000;
+const SBS = 16;
+const Q = 128;
 const REDUNDANCY = 3;
 const MIN_FRAMES = 30;
 const MAGIC = new Uint8Array([0x53, 0x57, 0x4D, 0x50]);
@@ -266,6 +266,24 @@ function seekVideo(video, time) {
   });
 }
 
+async function findWorkingCodec(w, h, bitrate, fps) {
+  const candidates = [
+    'avc1.42001f',
+    'avc1.420029',
+    'avc1.42E01E',
+    'avc1.4D401F',
+    'avc1.640029',
+  ];
+  const baseConfig = { width: w, height: h, bitrate, framerate: fps };
+  for (const codec of candidates) {
+    try {
+      const support = await VideoEncoder.isConfigSupported({ ...baseConfig, codec });
+      if (support.supported) return codec;
+    } catch (_) {}
+  }
+  return null;
+}
+
 export async function encode(file, coverVideo, onProgress, cancelCheck) {
   onProgress(2, 'Reading file...');
   await yieldToUI();
@@ -292,11 +310,9 @@ export async function encode(file, coverVideo, onProgress, cancelCheck) {
 
   onProgress(8, 'Initializing H.264...');
   await yieldToUI();
-  const codecString = 'avc1.42001f';
-  const support = await VideoEncoder.isConfigSupported({
-    codec: codecString, width: W, height: H, bitrate: BITRATE, framerate: FPS,
-  });
-  if (!support.supported) throw new Error('H.264 not supported in this browser.');
+
+  const codecString = await findWorkingCodec(W, H, BITRATE, FPS);
+  if (!codecString) throw new Error('H.264 not supported in this browser. Use Chrome or Edge.');
 
   const muxer = new Muxer({
     target: new ArrayBufferTarget(),
@@ -310,10 +326,24 @@ export async function encode(file, coverVideo, onProgress, cancelCheck) {
     error: e => { encError = e; },
   });
 
-  encoder.configure({
-    codec: codecString, width: W, height: H,
-    bitrate: BITRATE, framerate: FPS, latencyMode: 'quality',
-  });
+  const encConfig = {
+    codec: codecString,
+    width: W,
+    height: H,
+    bitrate: BITRATE,
+    framerate: FPS,
+    hardwareAcceleration: 'prefer-software',
+  };
+
+  try {
+    encoder.configure(encConfig);
+  } catch (e) {
+    throw new Error('Failed to configure H.264 encoder: ' + e.message);
+  }
+
+  if (encoder.state !== 'configured') {
+    throw new Error('H.264 encoder failed to reach configured state. Try Chrome or Edge.');
+  }
 
   const cvs = document.createElement('canvas');
   cvs.width = W; cvs.height = H;
