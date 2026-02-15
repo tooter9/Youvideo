@@ -59,12 +59,6 @@ a{color:var(--accent);text-decoration:none}
 .status .s-icon{font-size:16px;flex-shrink:0;margin-top:1px}
 .dl-area{margin-top:16px;display:none}
 .dl-area.show{display:block}
-.hash-box{margin-top:12px;padding:12px;background:var(--card2);border-radius:8px;font-family:'Courier New',monospace;font-size:11px;word-break:break-all;color:var(--text2)}
-.hash-label{font-size:11px;color:var(--text2);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.verify-result{margin-top:12px;padding:12px 16px;border-radius:8px;font-size:14px;font-weight:600;display:none}
-.verify-result.show{display:block}
-.verify-result.pass{background:rgba(52,211,153,.12);color:var(--success);border:1px solid rgba(52,211,153,.2)}
-.verify-result.fail{background:rgba(248,113,113,.12);color:var(--danger);border:1px solid rgba(248,113,113,.2)}
 .specs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:16px}
 .spec{padding:10px 12px;background:var(--card2);border-radius:8px;font-size:12px}
 .spec .spec-label{color:var(--text2);font-size:11px}
@@ -194,11 +188,6 @@ a{color:var(--accent);text-decoration:none}
 <div class="spec"><div class="spec-label">Bitrate</div><div id="specBitrate" class="spec-value">8 Mbps</div></div>
 </div>
 
-<div id="encHashArea" style="display:none">
-<div class="hash-label">SHA-256 Checksum</div>
-<div id="encHash" class="hash-box"></div>
-</div>
-
 <div id="encDlArea" class="dl-area">
 <button id="encDlBtn" class="btn btn-success">Download Video</button>
 </div>
@@ -232,15 +221,6 @@ a{color:var(--accent);text-decoration:none}
 </div>
 
 <div id="decStatusMsg" class="status"></div>
-
-<div id="decVerify" class="verify-result"></div>
-
-<div id="decHashArea" style="display:none">
-<div class="hash-label">Expected SHA-256</div>
-<div id="decHashExpected" class="hash-box"></div>
-<div class="hash-label" style="margin-top:8px">Actual SHA-256</div>
-<div id="decHashActual" class="hash-box"></div>
-</div>
 
 <div id="decDlArea" class="dl-area">
 <button id="decDlBtn" class="btn btn-success">Download Extracted File</button>
@@ -363,11 +343,6 @@ function updateEstimate() {
   }
 }
 
-async function sha256(buf) {
-  const h = await crypto.subtle.digest('SHA-256', buf);
-  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
-}
-
 function setupDrop(zoneId, inputId, onFile) {
   const zone = $(zoneId), inp = $(inputId);
   zone.addEventListener('click', () => inp.click());
@@ -417,7 +392,6 @@ function cleanupEncBlob() {
 function resetEncUI() {
   $('encDlArea').classList.remove('show');
   $('encSpecs').style.display = 'none';
-  $('encHashArea').style.display = 'none';
   $('encProgress').classList.remove('show');
   $('encCancelBtn').style.display = 'none';
   hideStatus('encStatusMsg');
@@ -457,8 +431,6 @@ setupDrop('decDropZone', 'decFileInput', f => {
   $('decFileSize').textContent = fmtSize(f.size);
   $('decodeBtn').disabled = false;
   $('decDlArea').classList.remove('show');
-  $('decVerify').className = 'verify-result';
-  $('decHashArea').style.display = 'none';
   $('decProgress').classList.remove('show');
   $('decCancelBtn').style.display = 'none';
   hideStatus('decStatusMsg');
@@ -472,8 +444,6 @@ $('decRemoveBtn').addEventListener('click', () => {
   $('decodeBtn').disabled = true;
   $('decDlArea').classList.remove('show');
   $('decProgress').classList.remove('show');
-  $('decVerify').className = 'verify-result';
-  $('decHashArea').style.display = 'none';
   $('decCancelBtn').style.display = 'none';
   hideStatus('decStatusMsg');
   cleanupDecBlob();
@@ -501,6 +471,37 @@ function renderFrame(uint32View, frameIdx, payload) {
   }
 }
 
+function generateVideoName() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const mo = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const h = String(now.getHours()).padStart(2, '0');
+  const mi = String(now.getMinutes()).padStart(2, '0');
+  return 'video_' + y + mo + d + '_' + h + mi + '.mp4';
+}
+
+function obfuscateHeader(headerJson) {
+  const headerBytes = new TextEncoder().encode(headerJson);
+  const key = new Uint8Array([0x7A, 0x3C, 0xE9, 0x51, 0xB8, 0x04, 0xDF, 0x62,
+                               0xA5, 0x17, 0x8B, 0xC3, 0x4E, 0x96, 0x2D, 0xF0]);
+  const obfuscated = new Uint8Array(headerBytes.length);
+  for (let i = 0; i < headerBytes.length; i++) {
+    obfuscated[i] = headerBytes[i] ^ key[i % key.length];
+  }
+  return obfuscated;
+}
+
+function deobfuscateHeader(obfuscatedBytes) {
+  const key = new Uint8Array([0x7A, 0x3C, 0xE9, 0x51, 0xB8, 0x04, 0xDF, 0x62,
+                               0xA5, 0x17, 0x8B, 0xC3, 0x4E, 0x96, 0x2D, 0xF0]);
+  const decoded = new Uint8Array(obfuscatedBytes.length);
+  for (let i = 0; i < obfuscatedBytes.length; i++) {
+    decoded[i] = obfuscatedBytes[i] ^ key[i % key.length];
+  }
+  return new TextDecoder().decode(decoded);
+}
+
 $('encCancelBtn').addEventListener('click', () => { encCancelled = true; });
 
 $('encodeBtn').addEventListener('click', async () => {
@@ -524,14 +525,11 @@ $('encodeBtn').addEventListener('click', async () => {
     const fileData = new Uint8Array(await encFile.arrayBuffer());
     if (encCancelled) throw new Error('Cancelled by user');
 
-    setProgress('encBar','encPercent','encStatus', 4, 'Computing SHA-256...');
-    await new Promise(r => setTimeout(r, 0));
-    const hash = await sha256(fileData);
-    if (encCancelled) throw new Error('Cancelled by user');
-
     setProgress('encBar','encPercent','encStatus', 7, 'Preparing data...');
-    const header = JSON.stringify({ name: encFile.name, size: fileData.length, hash: hash, v: 2 });
-    const headerBytes = new TextEncoder().encode(header);
+    await new Promise(r => setTimeout(r, 0));
+
+    const header = JSON.stringify({ n: encFile.name, s: fileData.length, v: 2 });
+    const headerBytes = obfuscateHeader(header);
     const payload = new PayloadView(headerBytes, fileData);
     const dataFrames = Math.ceil(payload.length * 4 / BPF);
     const totalFrames = Math.max(dataFrames, MIN_FRAMES);
@@ -540,8 +538,6 @@ $('encodeBtn').addEventListener('click', async () => {
     $('specBitrate').textContent = (quality.bitrate / 1_000_000) + ' Mbps';
     $('specDataRate').textContent = BYTES_PER_FRAME + ' bytes/frame';
     $('encSpecs').style.display = 'grid';
-    $('encHashArea').style.display = 'block';
-    $('encHash').textContent = hash;
 
     setProgress('encBar','encPercent','encStatus', 9, 'Initializing H.264 encoder...');
     await new Promise(r => setTimeout(r, 0));
@@ -579,7 +575,6 @@ $('encodeBtn').addEventListener('click', async () => {
     const MAX_QUEUE = 8;
     const startTime = performance.now();
     let lastYieldTime = startTime;
-    let lastFrameSlice = null;
 
     for (let i = 0; i < totalFrames; i++) {
       if (encCancelled) throw new Error('Cancelled by user');
@@ -659,7 +654,7 @@ $('encDlBtn').addEventListener('click', () => {
   if (!encBlob) return;
   if (encBlobUrl) URL.revokeObjectURL(encBlobUrl);
   encBlobUrl = URL.createObjectURL(encBlob);
-  const name = encFile ? encFile.name.replace(/\.[^.]+$/,'') + '_encoded.mp4' : 'encoded.mp4';
+  const name = generateVideoName();
   const a = document.createElement('a');
   a.href = encBlobUrl;
   a.download = name;
@@ -670,9 +665,9 @@ $('encDlBtn').addEventListener('click', () => {
 
 function sampleBlock(data, w, bx, by) {
   let tr=0,tg=0,tb=0;
-
-  const sx = bx*BS, sy = by*BS;
-  const ex = (bx+1)*BS, ey = (by+1)*BS;
+  const margin = 4;
+  const sx = bx*BS+margin, sy = by*BS+margin;
+  const ex = (bx+1)*BS-margin, ey = (by+1)*BS-margin;
   const count = (ex - sx) * (ey - sy);
   for (let y=sy; y<ey; y++) {
     const rowBase = y * w * 4;
@@ -717,8 +712,6 @@ $('decodeBtn').addEventListener('click', async () => {
   $('decCancelBtn').style.display = '';
   $('decProgress').classList.add('show');
   $('decDlArea').classList.remove('show');
-  $('decVerify').className = 'verify-result';
-  $('decHashArea').style.display = 'none';
   hideStatus('decStatusMsg');
   cleanupDecBlob();
 
@@ -787,7 +780,7 @@ $('decodeBtn').addEventListener('click', async () => {
         if (tempOffset >= 8) {
           if (tempBuffer[0] !== MAGIC[0] || tempBuffer[1] !== MAGIC[1] ||
               tempBuffer[2] !== MAGIC[2] || tempBuffer[3] !== MAGIC[3]) {
-            throw new Error('This video does not contain encoded file data (magic number not found).');
+            throw new Error('This video does not contain encoded file data. Make sure you are using a video created by this tool.');
           }
           const hl = (tempBuffer[4]<<24)|(tempBuffer[5]<<16)|(tempBuffer[6]<<8)|tempBuffer[7];
           if (hl > 10000 || hl < 10) {
@@ -795,8 +788,14 @@ $('decodeBtn').addEventListener('click', async () => {
           }
           if (tempOffset >= 8 + hl) {
             try {
-              const hdrJson = new TextDecoder().decode(tempBuffer.slice(8, 8+hl));
+              const obfuscatedBytes = tempBuffer.slice(8, 8 + hl);
+              const hdrJson = deobfuscateHeader(obfuscatedBytes);
               parsedHeader = JSON.parse(hdrJson);
+              if (!parsedHeader.n || !parsedHeader.s) {
+                throw new Error('Invalid header structure');
+              }
+              parsedHeader.name = parsedHeader.n;
+              parsedHeader.size = parsedHeader.s;
               totalNeeded = 8 + hl + parsedHeader.size;
               outputBuffer = new Uint8Array(totalNeeded);
               const toCopy = Math.min(tempOffset, totalNeeded);
@@ -845,33 +844,15 @@ $('decodeBtn').addEventListener('click', async () => {
       throw new Error('Video does not contain enough data. Expected ' + totalNeeded + ' bytes but got ' + outputOffset + '. The video may be incomplete.');
     }
 
-    setProgress('decBar','decPercent','decStatus', 92, 'Extracting file data...');
+    setProgress('decBar','decPercent','decStatus', 95, 'Extracting file data...');
     await new Promise(r => setTimeout(r, 0));
 
     const hl = (outputBuffer[4]<<24)|(outputBuffer[5]<<16)|(outputBuffer[6]<<8)|outputBuffer[7];
     const fileData = outputBuffer.slice(8 + hl, 8 + hl + parsedHeader.size);
 
-    setProgress('decBar','decPercent','decStatus', 95, 'Verifying SHA-256...');
-    await new Promise(r => setTimeout(r, 0));
-    const actualHash = await sha256(fileData);
-    const isValid = actualHash === parsedHeader.hash;
-
     setProgress('decBar','decPercent','decStatus', 100, 'Done!');
 
-    $('decHashArea').style.display = 'block';
-    $('decHashExpected').textContent = parsedHeader.hash;
-    $('decHashActual').textContent = actualHash;
-
-    const vr = $('decVerify');
-    if (isValid) {
-      vr.className = 'verify-result show pass';
-      vr.textContent = 'SHA-256 MATCH \u2014 File integrity verified. No data loss.';
-      showStatus('decStatusMsg','ok', 'File "' + parsedHeader.name + '" (' + fmtSize(parsedHeader.size) + ') extracted successfully.');
-    } else {
-      vr.className = 'verify-result show fail';
-      vr.textContent = 'SHA-256 MISMATCH \u2014 File may be corrupted. This can happen after YouTube re-encoding.';
-      showStatus('decStatusMsg','warn', 'File "' + parsedHeader.name + '" extracted but SHA-256 does not match. The file may have minor corruption from video compression.');
-    }
+    showStatus('decStatusMsg','ok', 'File "' + parsedHeader.name + '" (' + fmtSize(parsedHeader.size) + ') extracted successfully.');
 
     decResult = { data: fileData, filename: parsedHeader.name };
     $('decDlArea').classList.add('show');
