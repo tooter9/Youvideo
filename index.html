@@ -3,41 +3,139 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Thousands of Cats Gallery</title>
+  <title>Cats Gallery</title>
   <style>
-    :root { --bg:#000; --text:#ddd; --accent:#ff79c6; --card:#111; }
-    body { background:var(--bg); color:var(--text); margin:0; padding:20px; font-family:system-ui,sans-serif; text-align:center; }
-    h1 { color:var(--accent); margin:1em 0; }
-    #status { color:#888; margin:2em; font-size:1.2em; white-space:pre-wrap; }
-    .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; max-width:1800px; margin:0 auto; }
-    .item { background:var(--card); border-radius:10px; overflow:hidden; box-shadow:0 4px 12px #000; transition:0.2s; opacity:0; transform:translateY(30px); }
-    .item.visible { opacity:1; transform:translateY(0); }
-    .item:hover { transform:scale(1.04); }
-    img { width:100%; height:auto; display:block; }
-    #loadMore { margin:3em auto; padding:14px 40px; font-size:1.2em; background:var(--accent); color:#000; border:none; border-radius:50px; cursor:pointer; }
-    #loadMore:disabled { opacity:0.4; cursor:not-allowed; }
+    :root {
+      --bg: #0e0b16;
+      --text: #e5e5e5;
+      --accent: #ff2ced;
+      --card: #1a122b;
+      --hover: #2d1b47;
+      --grid-glow: rgba(255, 45, 237, 0.08);
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      font-family: 'Minecraft', 'Courier New', monospace;
+      text-align: center;
+      min-height: 100vh;
+      background-image:
+        linear-gradient(rgba(255, 45, 237, 0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 45, 237, 0.03) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+    h1 {
+      color: var(--accent);
+      margin: 1em 0;
+      font-size: 2em;
+      text-shadow: 0 0 6px var(--accent);
+      letter-spacing: 2px;
+      font-weight: bold;
+    }
+    #status {
+      color: #a0a0a0;
+      margin: 1.5em auto;
+      font-size: 1em;
+      max-width: 600px;
+      line-height: 1.5;
+      background: rgba(26, 18, 43, 0.6);
+      padding: 12px;
+      border: 1px solid rgba(255, 45, 237, 0.2);
+      border-radius: 4px;
+      display: inline-block;
+    }
+    .gallery {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 10px;
+    }
+    .item {
+      background: var(--card);
+      border-radius: 4px;
+      overflow: hidden;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
+      transition: all 0.2s;
+      opacity: 0;
+      transform: translateY(10px);
+      aspect-ratio: 1;
+      border: 1px solid rgba(255, 45, 237, 0.1);
+    }
+    .item.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .item:hover {
+      transform: scale(1.02);
+      box-shadow: 0 6px 12px rgba(255, 45, 237, 0.2);
+      border-color: rgba(255, 45, 237, 0.3);
+    }
+    .item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    #loadMore {
+      margin: 3em auto;
+      padding: 12px 32px;
+      font-size: 1em;
+      background: var(--accent);
+      color: #000;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(255, 45, 237, 0.3);
+      font-family: 'Minecraft', 'Courier New', monospace;
+      letter-spacing: 1px;
+    }
+    #loadMore:hover {
+      background: #ff00cc;
+      box-shadow: 0 4px 12px rgba(255, 45, 237, 0.4);
+    }
+    #loadMore:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    @media (max-width: 900px) {
+      .gallery {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 500px) {
+      .gallery {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>🐱 Cats Collection – Thousands Forever 🐾</h1>
-  <div id="status">Loading thousands of cats... (this may take 10–60 sec for big collections)</div>
+  <h1>CATS GALLERY</h1>
+  <div id="status">LOADING CATS...</div>
 
   <div class="gallery" id="gallery"></div>
-  <button id="loadMore" disabled>Loading more...</button>
+  <button id="loadMore" disabled>LOADING</button>
 
   <script>
     const CONFIG = {
-      owner: 'tooter9',                    // ← твой логин (уже правильный?)
-      repo:  'Youvideo',                   // ← имя репозитория (Youvideo)
-      branch: 'main',                      // обычно main или master
-      basePaths: ['cats/'],                // добавь ['cats/', 'cats-extra/'] если разбил на подпапки
+      owner: 'tooter9',
+      repo: 'Youvideo',
+      branch: 'main',
+      basePaths: ['cats/'],
       extensions: /\.(jpe?g|png|gif|webp)$/i,
-      token: ''                            // ← если есть PAT: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' (не коммить в публичный код!)
+      token: ''
     };
 
     let allFiles = [];
     let displayed = 0;
-    const BATCH = 60;
+    const BATCH = 16;
 
     const gallery = document.getElementById('gallery');
     const status = document.getElementById('status');
@@ -53,7 +151,7 @@
     }
 
     async function fetchList() {
-      status.textContent = 'Fetching file list from GitHub API...';
+      status.textContent = 'FETCHING FILES FROM GITHUB...';
       const headers = CONFIG.token ? { Authorization: `token ${CONFIG.token}` } : {};
       try {
         const ref = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`, {headers}).then(r=>r.json());
@@ -64,7 +162,7 @@
         if (tree.message) throw new Error(tree.message);
 
         if (tree.truncated) {
-          status.innerHTML = '⚠️ Too many files (truncated by GitHub). Split photos into subfolders:\n• cats/1/\n• cats/2/\n etc. (max ~800 per folder)';
+          status.textContent = 'WARNING: TOO MANY FILES. SPLIT INTO SUBFOLDERS.';
         }
 
         allFiles = [];
@@ -79,16 +177,13 @@
           }
         });
 
-        allFiles.sort(); // по имени файла
-
+        allFiles.sort(() => Math.random() - 0.5);
         localStorage.setItem('catsCache', JSON.stringify(allFiles));
         localStorage.setItem('catsCacheTime', Date.now());
-
-        status.textContent = `Found ${allFiles.length} cat photos! Rendering...`;
+        status.textContent = 'READY.';
       } catch (e) {
-        status.textContent = `Error: ${e.message}\n\nPossible fixes:\n1. Check if repo is public\n2. Wait 1 hour (API limit)\n3. Add token in CONFIG.token\n4. Use cache below if available`;
+        status.textContent = `ERROR: ${e.message}`;
         allFiles = getCache() || [];
-        if (allFiles.length) status.innerHTML += `\n\nUsing cached list (${allFiles.length} items)`;
       }
     }
 
@@ -103,38 +198,37 @@
 
         const img = new Image();
         img.src = url;
-        img.alt = path.split('/').pop().replace(/\.[^/.]+$/, '');
+        img.alt = 'Cat';
         img.loading = 'lazy';
         img.onerror = () => div.remove();
 
         div.appendChild(img);
         gallery.appendChild(div);
 
-        setTimeout(() => div.classList.add('visible'), 30 * (i - displayed));
+        setTimeout(() => div.classList.add('visible'), 20 * (i - displayed));
       }
       displayed = end;
 
-      status.textContent = `Showing ${displayed} / ${allFiles.length}`;
       btn.disabled = displayed >= allFiles.length;
-      btn.textContent = btn.disabled ? 'All cats loaded 🐱' : 'Load more cats';
+      btn.textContent = btn.disabled ? 'NO MORE CATS' : 'LOAD MORE';
     }
 
     const obs = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && displayed < allFiles.length) renderNextBatch();
-    });
+    }, {threshold: 0.5});
     obs.observe(btn);
 
     (async () => {
       allFiles = getCache();
       if (!allFiles?.length) await fetchList();
-      else status.textContent = `Loaded ${allFiles.length} cats from cache (refresh page to update)`;
+      else status.textContent = 'CACHE LOADED.';
 
       if (allFiles.length > 0) {
         renderNextBatch();
         btn.disabled = false;
-        btn.textContent = 'Load more cats';
+        btn.textContent = 'LOAD MORE';
       } else {
-        status.innerHTML += '\n\nNo photos found. Upload to /cats/ folder and refresh.';
+        status.textContent = 'NO CATS FOUND.';
       }
     })();
 
