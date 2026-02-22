@@ -1,238 +1,399 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cats Gallery</title>
+  <title>catohmygod</title>
   <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
     :root {
-      --bg: #0e0b16;
-      --text: #e5e5e5;
-      --accent: #ff2ced;
-      --card: #1a122b;
-      --hover: #2d1b47;
-      --grid-glow: rgba(255, 45, 237, 0.08);
+      --bg: #0b0814;
+      --accent-pink: #ff00ff;
+      --accent-lime: #39ff14;
+      --gold: #ffcc00;
+      --dark: #1a1433;
+      --glow: rgba(255, 0, 255, 0.4);
     }
+
+    * { 
+      margin: 0; 
+      padding: 0; 
+      box-sizing: border-box; 
+    }
+
     body {
       background: var(--bg);
-      color: var(--text);
-      margin: 0;
-      padding: 20px;
-      font-family: 'Minecraft', 'Courier New', monospace;
+      color: #fff;
+      font-family: 'Press Start 2P', monospace;
       text-align: center;
       min-height: 100vh;
-      background-image:
-        linear-gradient(rgba(255, 45, 237, 0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 45, 237, 0.03) 1px, transparent 1px);
-      background-size: 50px 50px;
+      background-image: 
+        linear-gradient(rgba(57, 255, 20, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57, 255, 20, 0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px 10px;
     }
-    h1 {
-      color: var(--accent);
-      margin: 1em 0;
-      font-size: 2em;
-      text-shadow: 0 0 6px var(--accent);
-      letter-spacing: 2px;
-      font-weight: bold;
-    }
-    #status {
-      color: #a0a0a0;
-      margin: 1.5em auto;
-      font-size: 1em;
-      max-width: 600px;
-      line-height: 1.5;
-      background: rgba(26, 18, 43, 0.6);
-      padding: 12px;
-      border: 1px solid rgba(255, 45, 237, 0.2);
-      border-radius: 4px;
-      display: inline-block;
-    }
-    .gallery {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 16px;
-      max-width: 1200px;
-      margin: 0 auto;
-      padding: 0 10px;
-    }
-    .item {
-      background: var(--card);
-      border-radius: 4px;
-      overflow: hidden;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
-      transition: all 0.2s;
-      opacity: 0;
-      transform: translateY(10px);
-      aspect-ratio: 1;
-      border: 1px solid rgba(255, 45, 237, 0.1);
-    }
-    .item.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .item:hover {
-      transform: scale(1.02);
-      box-shadow: 0 6px 12px rgba(255, 45, 237, 0.2);
-      border-color: rgba(255, 45, 237, 0.3);
-    }
-    .item img {
+
+    header {
+      margin-bottom: 25px;
       width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+      max-width: 920px;
     }
-    #loadMore {
-      margin: 3em auto;
-      padding: 12px 32px;
-      font-size: 1em;
-      background: var(--accent);
-      color: #000;
-      border: none;
-      border-radius: 4px;
+
+    h1 {
+      font-size: 4.2rem;
+      line-height: 0.9;
+      margin-bottom: 6px;
+      color: var(--accent-lime);
+      text-shadow: 
+        0 0 20px var(--accent-pink),
+        8px 8px 0 #000,
+        -4px -4px 0 #000;
+      letter-spacing: 8px;
+      -webkit-text-stroke: 4px #000;
+    }
+
+    .subtitle {
+      color: var(--accent-pink);
+      font-size: 1.15rem;
+      letter-spacing: 7px;
+      text-shadow: 0 0 15px var(--accent-pink);
+    }
+
+    .viewer-container {
+      width: 100%;
+      max-width: 920px;
+      margin: 20px auto 30px;
+      padding: 18px;
+      background: var(--dark);
+      border: 12px solid #000;
+      box-shadow: 
+        0 0 0 16px var(--accent-pink),
+        0 0 80px var(--glow),
+        inset 0 0 60px rgba(0, 0, 0, 0.95);
+      position: relative;
+      border-radius: 8px;
+    }
+
+    #viewer {
+      width: 100%;
+      min-height: 520px;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      border: 6px solid #111;
+    }
+
+    #viewer img, 
+    #viewer video {
+      max-width: 100%;
+      max-height: 520px;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      transition: opacity 0.35s ease;
+    }
+
+    .type-label {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      background: rgba(0,0,0,0.9);
+      color: var(--accent-lime);
+      padding: 8px 18px;
+      font-size: 0.78rem;
+      border: 4px solid var(--accent-lime);
+      text-transform: uppercase;
+      letter-spacing: 3px;
+      box-shadow: 0 0 15px #000;
+      z-index: 5;
+    }
+
+    .controls {
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      gap: 22px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 1.15rem;
+      padding: 18px 38px;
+      border: 6px solid #fff;
+      background: #000;
+      color: #fff;
       cursor: pointer;
-      font-weight: bold;
-      transition: all 0.2s;
-      box-shadow: 0 2px 8px rgba(255, 45, 237, 0.3);
-      font-family: 'Minecraft', 'Courier New', monospace;
+      transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
+      box-shadow: 6px 6px 0 #fff;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      min-width: 180px;
+    }
+
+    button:hover {
+      transform: translate(-4px, -6px);
+      box-shadow: 12px 12px 0 var(--accent-pink);
+      background: var(--accent-pink);
+      color: #000;
+      border-color: var(--accent-pink);
+    }
+
+    button:active {
+      transform: translate(2px, 2px);
+      box-shadow: 4px 4px 0 #000;
+    }
+
+    #nextBtn {
+      font-size: 1.55rem;
+      padding: 24px 62px;
+      background: linear-gradient(45deg, var(--accent-lime), #00ff88);
+      color: #000;
+      border-color: #000;
+      box-shadow: 8px 8px 0 #000;
+      min-width: 320px;
+    }
+
+    #nextBtn:hover {
+      background: linear-gradient(45deg, #fff, var(--accent-lime));
+      box-shadow: 12px 12px 0 #000;
+    }
+
+    .status {
+      margin: 20px 0 12px;
+      color: #aaa;
+      font-size: 0.92rem;
+      min-height: 26px;
       letter-spacing: 1px;
     }
-    #loadMore:hover {
-      background: #ff00cc;
-      box-shadow: 0 4px 12px rgba(255, 45, 237, 0.4);
+
+    .filename {
+      margin-top: 8px;
+      font-size: 0.82rem;
+      color: #666;
+      word-break: break-all;
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
     }
-    #loadMore:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-      box-shadow: none;
-    }
-    @media (max-width: 900px) {
-      .gallery {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    @media (max-width: 500px) {
-      .gallery {
-        grid-template-columns: 1fr;
-      }
+
+    @media (max-width: 768px) {
+      h1 { font-size: 2.8rem; }
+      #viewer { min-height: 380px; }
+      button { padding: 14px 24px; font-size: 1rem; }
     }
   </style>
 </head>
 <body>
-  <h1>CATS GALLERY</h1>
-  <div id="status">LOADING CATS...</div>
+  <header>
+    <h1>CAT<br>OH MY GOD</h1>
+    <p class="subtitle">catohmygod edition</p>
+  </header>
 
-  <div class="gallery" id="gallery"></div>
-  <button id="loadMore" disabled>LOADING</button>
+  <div class="viewer-container">
+    <div id="viewer"></div>
+    <div class="type-label" id="typeLabel">CAT MEDIA</div>
+  </div>
+
+  <div class="status" id="status">ЗАГРУЗКА ЛЕГЕНДАРНЫХ КОТОВ...</div>
+  <div class="filename" id="filename"></div>
+
+  <div class="controls">
+    <button id="prevBtn">← НАЗАД</button>
+    <button id="nextBtn">ОХ MY GOD ЕЩЁ ОДНОГО!</button>
+    <button id="downloadBtn">↓ СКАЧАТЬ</button>
+  </div>
 
   <script>
     const CONFIG = {
       owner: 'tooter9',
       repo: 'Youvideo',
       branch: 'main',
-      basePaths: ['cats/'],
-      extensions: /\.(jpe?g|png|gif|webp)$/i,
-      token: ''
+      path: 'cats/',
+      extensions: /\.(jpe?g|png|gif|webp|mp4|webm|mov)$/i
     };
 
     let allFiles = [];
-    let displayed = 0;
-    const BATCH = 16;
+    let currentFile = null;
+    let historyStack = [];
+    let isLoading = false;
 
-    const gallery = document.getElementById('gallery');
-    const status = document.getElementById('status');
-    const btn = document.getElementById('loadMore');
+    const viewer = document.getElementById('viewer');
+    const statusEl = document.getElementById('status');
+    const filenameEl = document.getElementById('filename');
+    const typeLabel = document.getElementById('typeLabel');
+    const prevBtn = document.getElementById('prevBtn');
+    const nextBtn = document.getElementById('nextBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
 
     function getCache() {
       try {
-        const c = localStorage.getItem('catsCache');
-        const t = localStorage.getItem('catsCacheTime');
-        if (c && Date.now() - t < 7*24*60*60*1000) return JSON.parse(c);
-      } catch {}
+        const cached = localStorage.getItem('catohmygodFiles');
+        const time = localStorage.getItem('catohmygodTime');
+        if (cached && time && Date.now() - parseInt(time) < 7 * 24 * 60 * 60 * 1000) {
+          return JSON.parse(cached);
+        }
+      } catch (e) {}
       return null;
     }
 
-    async function fetchList() {
-      status.textContent = 'FETCHING FILES FROM GITHUB...';
-      const headers = CONFIG.token ? { Authorization: `token ${CONFIG.token}` } : {};
+    function saveCache(files) {
       try {
-        const ref = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`, {headers}).then(r=>r.json());
-        if (ref.message) throw new Error(ref.message);
+        localStorage.setItem('catohmygodFiles', JSON.stringify(files));
+        localStorage.setItem('catohmygodTime', Date.now());
+      } catch (e) {}
+    }
+
+    function getFileType(path) {
+      const ext = path.split('.').pop().toLowerCase();
+      return ['mp4', 'webm', 'mov'].includes(ext) ? 'VIDEO' : 'PHOTO';
+    }
+
+    function createMedia(url, path) {
+      viewer.innerHTML = '';
+      const type = getFileType(path);
+
+      if (type === 'VIDEO') {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        video.autoplay = true;
+        video.loop = true;
+        video.muted = true;
+        video.style.maxHeight = '520px';
+        viewer.appendChild(video);
+        typeLabel.textContent = 'VIDEO';
+        typeLabel.style.borderColor = '#00ffff';
+        typeLabel.style.color = '#00ffff';
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        img.alt = 'catohmygod';
+        viewer.appendChild(img);
+        typeLabel.textContent = 'PHOTO';
+        typeLabel.style.borderColor = '#39ff14';
+        typeLabel.style.color = '#39ff14';
+      }
+    }
+
+    function showMedia(path) {
+      if (!path) return;
+      currentFile = path;
+      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
+      
+      createMedia(url, path);
+      filenameEl.textContent = path.split('/').pop() || 'cat.media';
+
+      if (!historyStack.includes(path)) {
+        historyStack.push(path);
+        if (historyStack.length > 20) historyStack.shift();
+      }
+
+      prevBtn.disabled = historyStack.length <= 1;
+    }
+
+    function getRandomMedia() {
+      if (!allFiles.length) return null;
+      let attempts = 0;
+      let idx;
+      do {
+        idx = Math.floor(Math.random() * allFiles.length);
+        attempts++;
+      } while (allFiles[idx] === currentFile && allFiles.length > 1 && attempts < 30);
+      return allFiles[idx];
+    }
+
+    async function fetchFiles() {
+      statusEl.textContent = 'СКАНИРУЕМ ВИДЕО И ФОТКИ КОТОВ...';
+      isLoading = true;
+
+      const cached = getCache();
+      if (cached && cached.length) {
+        allFiles = cached;
+        statusEl.textContent = `${allFiles.length} КОТОВ ЗАГРУЖЕНО ИЗ КЭША`;
+        isLoading = false;
+        showMedia(allFiles[0]);
+        return;
+      }
+
+      try {
+        const refRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`);
+        const ref = await refRes.json();
         const sha = ref.object.sha;
 
-        const tree = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/${sha}?recursive=1`, {headers}).then(r=>r.json());
-        if (tree.message) throw new Error(tree.message);
+        const treeRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/${sha}?recursive=1`);
+        const data = await treeRes.json();
 
-        if (tree.truncated) {
-          status.textContent = 'WARNING: TOO MANY FILES. SPLIT INTO SUBFOLDERS.';
-        }
-
-        allFiles = [];
-        tree.tree.forEach(item => {
-          if (item.type === 'blob' && CONFIG.extensions.test(item.path)) {
-            for (const bp of CONFIG.basePaths) {
-              if (item.path.startsWith(bp)) {
-                allFiles.push(item.path);
-                break;
-              }
-            }
-          }
-        });
+        allFiles = data.tree
+          .filter(item => 
+            item.type === 'blob' && 
+            CONFIG.extensions.test(item.path) && 
+            item.path.startsWith(CONFIG.path)
+          )
+          .map(item => item.path);
 
         allFiles.sort(() => Math.random() - 0.5);
-        localStorage.setItem('catsCache', JSON.stringify(allFiles));
-        localStorage.setItem('catsCacheTime', Date.now());
-        status.textContent = 'READY.';
+        saveCache(allFiles);
+
+        statusEl.textContent = `${allFiles.length} КОТОВ ГОТОВЫ. OH MY GOD!`;
       } catch (e) {
-        status.textContent = `ERROR: ${e.message}`;
+        console.error(e);
+        statusEl.textContent = 'ОШИБКА. ИСПОЛЬЗУЕМ КЭШ...';
         allFiles = getCache() || [];
       }
+
+      isLoading = false;
+      if (allFiles.length) showMedia(allFiles[0]);
     }
 
-    function renderNextBatch() {
-      const end = Math.min(displayed + BATCH, allFiles.length);
-      for (let i = displayed; i < end; i++) {
-        const path = allFiles[i];
-        const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
+    // Кнопки
+    nextBtn.addEventListener('click', () => {
+      if (isLoading || !allFiles.length) return;
+      const randomOne = getRandomMedia();
+      if (randomOne) showMedia(randomOne);
+    });
 
-        const div = document.createElement('div');
-        div.className = 'item';
+    prevBtn.addEventListener('click', () => {
+      if (historyStack.length < 2 || isLoading) return;
+      historyStack.pop(); // убираем текущий
+      const prev = historyStack[historyStack.length - 1];
+      if (prev) showMedia(prev);
+    });
 
-        const img = new Image();
-        img.src = url;
-        img.alt = 'Cat';
-        img.loading = 'lazy';
-        img.onerror = () => div.remove();
+    downloadBtn.addEventListener('click', () => {
+      if (!currentFile) return;
+      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${currentFile}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = currentFile.split('/').pop();
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
 
-        div.appendChild(img);
-        gallery.appendChild(div);
-
-        setTimeout(() => div.classList.add('visible'), 20 * (i - displayed));
+    // Клавиатура
+    document.addEventListener('keydown', e => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        nextBtn.click();
       }
-      displayed = end;
+      if (e.key === 'ArrowLeft') prevBtn.click();
+    });
 
-      btn.disabled = displayed >= allFiles.length;
-      btn.textContent = btn.disabled ? 'NO MORE CATS' : 'LOAD MORE';
-    }
-
-    const obs = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && displayed < allFiles.length) renderNextBatch();
-    }, {threshold: 0.5});
-    obs.observe(btn);
-
-    (async () => {
-      allFiles = getCache();
-      if (!allFiles?.length) await fetchList();
-      else status.textContent = 'CACHE LOADED.';
-
-      if (allFiles.length > 0) {
-        renderNextBatch();
-        btn.disabled = false;
-        btn.textContent = 'LOAD MORE';
-      } else {
-        status.textContent = 'NO CATS FOUND.';
-      }
-    })();
-
-    btn.onclick = renderNextBatch;
+    // Старт
+    window.onload = () => {
+      fetchFiles();
+    };
   </script>
 </body>
 </html>
