@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,9 +11,8 @@
       --bg: #0b0814;
       --accent-pink: #ff00ff;
       --accent-lime: #39ff14;
-      --gold: #ffcc00;
       --dark: #1a1433;
-      --glow: rgba(255, 0, 255, 0.4);
+      --glow: rgba(255, 0, 255, 0.35);
     }
 
     * { 
@@ -29,55 +28,47 @@
       text-align: center;
       min-height: 100vh;
       background-image: 
-        linear-gradient(rgba(57, 255, 20, 0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(57, 255, 20, 0.04) 1px, transparent 1px);
+        linear-gradient(rgba(57, 255, 20, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(57, 255, 20, 0.035) 1px, transparent 1px);
       background-size: 32px 32px;
       overflow-x: hidden;
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 20px 10px;
+      padding: 30px 15px 40px;
     }
 
     header {
-      margin-bottom: 25px;
+      margin-bottom: 30px;
       width: 100%;
-      max-width: 920px;
+      max-width: 900px;
     }
 
     h1 {
-      font-size: 4.2rem;
-      line-height: 0.9;
-      margin-bottom: 6px;
+      font-size: 4.1rem;
+      line-height: 0.88;
       color: var(--accent-lime);
       text-shadow: 
-        0 0 20px var(--accent-pink),
-        8px 8px 0 #000,
-        -4px -4px 0 #000;
-      letter-spacing: 8px;
-      -webkit-text-stroke: 4px #000;
-    }
-
-    .subtitle {
-      color: var(--accent-pink);
-      font-size: 1.15rem;
-      letter-spacing: 7px;
-      text-shadow: 0 0 15px var(--accent-pink);
+        0 0 22px var(--accent-pink),
+        7px 7px 0 #000,
+        -3px -3px 0 #000;
+      letter-spacing: 6px;
+      -webkit-text-stroke: 3.5px #000;
     }
 
     .viewer-container {
       width: 100%;
-      max-width: 920px;
-      margin: 20px auto 30px;
-      padding: 18px;
+      max-width: 900px;
+      margin: 0 auto 35px;
+      padding: 20px;
       background: var(--dark);
-      border: 12px solid #000;
+      border: 14px solid #000;
       box-shadow: 
-        0 0 0 16px var(--accent-pink),
-        0 0 80px var(--glow),
-        inset 0 0 60px rgba(0, 0, 0, 0.95);
+        0 0 0 18px var(--accent-pink),
+        0 0 70px var(--glow),
+        inset 0 0 55px rgba(0, 0, 0, 0.9);
+      border-radius: 6px;
       position: relative;
-      border-radius: 8px;
     }
 
     #viewer {
@@ -87,9 +78,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      position: relative;
       overflow: hidden;
-      border: 6px solid #111;
+      border: 7px solid #111;
     }
 
     #viewer img, 
@@ -99,105 +89,92 @@
       width: auto;
       height: auto;
       object-fit: contain;
-      transition: opacity 0.35s ease;
+      transition: opacity 0.4s ease;
     }
 
     .type-label {
       position: absolute;
-      top: 18px;
-      right: 18px;
-      background: rgba(0,0,0,0.9);
+      top: 22px;
+      right: 22px;
+      background: rgba(0,0,0,0.92);
       color: var(--accent-lime);
-      padding: 8px 18px;
-      font-size: 0.78rem;
+      padding: 7px 20px;
+      font-size: 0.75rem;
       border: 4px solid var(--accent-lime);
       text-transform: uppercase;
       letter-spacing: 3px;
-      box-shadow: 0 0 15px #000;
-      z-index: 5;
+      box-shadow: 0 0 12px #000;
+      z-index: 10;
+    }
+
+    .status {
+      margin: 18px 0 8px;
+      color: #888;
+      font-size: 0.9rem;
+      letter-spacing: 1.5px;
+      min-height: 24px;
     }
 
     .controls {
-      max-width: 920px;
+      max-width: 900px;
       margin: 0 auto;
       display: flex;
-      gap: 22px;
+      gap: 25px;
       justify-content: center;
       flex-wrap: wrap;
     }
 
     button {
       font-family: 'Press Start 2P', monospace;
-      font-size: 1.15rem;
-      padding: 18px 38px;
-      border: 6px solid #fff;
+      font-size: 1.2rem;
+      padding: 19px 42px;
+      border: 7px solid #fff;
       background: #000;
       color: #fff;
       cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.23, 1, 0.32, 1);
-      box-shadow: 6px 6px 0 #fff;
+      transition: all 0.2s cubic-bezier(0.25, 0.9, 0.3, 1);
+      box-shadow: 7px 7px 0 #fff;
       text-transform: uppercase;
       letter-spacing: 2px;
-      min-width: 180px;
     }
 
     button:hover {
       transform: translate(-4px, -6px);
-      box-shadow: 12px 12px 0 var(--accent-pink);
+      box-shadow: 13px 13px 0 var(--accent-pink);
       background: var(--accent-pink);
       color: #000;
       border-color: var(--accent-pink);
     }
 
     button:active {
-      transform: translate(2px, 2px);
+      transform: translate(3px, 3px);
       box-shadow: 4px 4px 0 #000;
     }
 
     #nextBtn {
-      font-size: 1.55rem;
-      padding: 24px 62px;
+      font-size: 1.6rem;
+      padding: 26px 68px;
       background: linear-gradient(45deg, var(--accent-lime), #00ff88);
       color: #000;
       border-color: #000;
       box-shadow: 8px 8px 0 #000;
-      min-width: 320px;
     }
 
     #nextBtn:hover {
       background: linear-gradient(45deg, #fff, var(--accent-lime));
-      box-shadow: 12px 12px 0 #000;
-    }
-
-    .status {
-      margin: 20px 0 12px;
-      color: #aaa;
-      font-size: 0.92rem;
-      min-height: 26px;
-      letter-spacing: 1px;
-    }
-
-    .filename {
-      margin-top: 8px;
-      font-size: 0.82rem;
-      color: #666;
-      word-break: break-all;
-      max-width: 700px;
-      margin-left: auto;
-      margin-right: auto;
+      box-shadow: 14px 14px 0 #000;
     }
 
     @media (max-width: 768px) {
-      h1 { font-size: 2.8rem; }
-      #viewer { min-height: 380px; }
-      button { padding: 14px 24px; font-size: 1rem; }
+      h1 { font-size: 2.85rem; letter-spacing: 4px; }
+      #viewer { min-height: 390px; }
+      button { padding: 16px 28px; font-size: 1.05rem; }
     }
   </style>
 </head>
 <body>
   <header>
     <h1>CAT<br>OH MY GOD</h1>
-    <p class="subtitle">catohmygod edition</p>
   </header>
 
   <div class="viewer-container">
@@ -205,13 +182,12 @@
     <div class="type-label" id="typeLabel">CAT MEDIA</div>
   </div>
 
-  <div class="status" id="status">ЗАГРУЗКА ЛЕГЕНДАРНЫХ КОТОВ...</div>
-  <div class="filename" id="filename"></div>
+  <div class="status" id="status">LOADING LEGENDARY CATS...</div>
 
   <div class="controls">
-    <button id="prevBtn">← НАЗАД</button>
-    <button id="nextBtn">ОХ MY GOD ЕЩЁ ОДНОГО!</button>
-    <button id="downloadBtn">↓ СКАЧАТЬ</button>
+    <button id="prevBtn">← BACK</button>
+    <button id="nextBtn">OH MY GOD ANOTHER ONE!</button>
+    <button id="downloadBtn">↓ DOWNLOAD</button>
   </div>
 
   <script>
@@ -230,7 +206,6 @@
 
     const viewer = document.getElementById('viewer');
     const statusEl = document.getElementById('status');
-    const filenameEl = document.getElementById('filename');
     const typeLabel = document.getElementById('typeLabel');
     const prevBtn = document.getElementById('prevBtn');
     const nextBtn = document.getElementById('nextBtn');
@@ -270,7 +245,6 @@
         video.autoplay = true;
         video.loop = true;
         video.muted = true;
-        video.style.maxHeight = '520px';
         viewer.appendChild(video);
         typeLabel.textContent = 'VIDEO';
         typeLabel.style.borderColor = '#00ffff';
@@ -278,7 +252,7 @@
       } else {
         const img = document.createElement('img');
         img.src = url;
-        img.alt = 'catohmygod';
+        img.alt = 'cat';
         viewer.appendChild(img);
         typeLabel.textContent = 'PHOTO';
         typeLabel.style.borderColor = '#39ff14';
@@ -292,7 +266,6 @@
       const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
       
       createMedia(url, path);
-      filenameEl.textContent = path.split('/').pop() || 'cat.media';
 
       if (!historyStack.includes(path)) {
         historyStack.push(path);
@@ -304,25 +277,23 @@
 
     function getRandomMedia() {
       if (!allFiles.length) return null;
-      let attempts = 0;
       let idx;
       do {
         idx = Math.floor(Math.random() * allFiles.length);
-        attempts++;
-      } while (allFiles[idx] === currentFile && allFiles.length > 1 && attempts < 30);
+      } while (allFiles[idx] === currentFile && allFiles.length > 1);
       return allFiles[idx];
     }
 
     async function fetchFiles() {
-      statusEl.textContent = 'СКАНИРУЕМ ВИДЕО И ФОТКИ КОТОВ...';
+      statusEl.textContent = 'LOADING LEGENDARY CATS...';
       isLoading = true;
 
       const cached = getCache();
       if (cached && cached.length) {
         allFiles = cached;
-        statusEl.textContent = `${allFiles.length} КОТОВ ЗАГРУЖЕНО ИЗ КЭША`;
+        statusEl.textContent = 'READY.';
         isLoading = false;
-        showMedia(allFiles[0]);
+        showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
         return;
       }
 
@@ -345,18 +316,20 @@
         allFiles.sort(() => Math.random() - 0.5);
         saveCache(allFiles);
 
-        statusEl.textContent = `${allFiles.length} КОТОВ ГОТОВЫ. OH MY GOD!`;
+        statusEl.textContent = 'READY.';
       } catch (e) {
         console.error(e);
-        statusEl.textContent = 'ОШИБКА. ИСПОЛЬЗУЕМ КЭШ...';
+        statusEl.textContent = 'ERROR. USING CACHE...';
         allFiles = getCache() || [];
+        if (allFiles.length) statusEl.textContent = 'READY.';
       }
 
       isLoading = false;
-      if (allFiles.length) showMedia(allFiles[0]);
+      if (allFiles.length && !currentFile) {
+        showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
+      }
     }
 
-    // Кнопки
     nextBtn.addEventListener('click', () => {
       if (isLoading || !allFiles.length) return;
       const randomOne = getRandomMedia();
@@ -365,7 +338,7 @@
 
     prevBtn.addEventListener('click', () => {
       if (historyStack.length < 2 || isLoading) return;
-      historyStack.pop(); // убираем текущий
+      historyStack.pop();
       const prev = historyStack[historyStack.length - 1];
       if (prev) showMedia(prev);
     });
@@ -381,7 +354,6 @@
       document.body.removeChild(a);
     });
 
-    // Клавиатура
     document.addEventListener('keydown', e => {
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
@@ -390,7 +362,6 @@
       if (e.key === 'ArrowLeft') prevBtn.click();
     });
 
-    // Старт
     window.onload = () => {
       fetchFiles();
     };
