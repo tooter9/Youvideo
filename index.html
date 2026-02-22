@@ -3,222 +3,142 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cat Collection – Photos & Videos</title>
-  <meta name="description" content="Private gallery of thousands of cats">
-  <!-- Базовая CSP для безопасности (можно усилить) -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://raw.githubusercontent.com; media-src 'self' https://raw.githubusercontent.com; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline';">
+  <title>Thousands of Cats Gallery</title>
   <style>
-    :root {
-      --bg: #0b0b0f;
-      --card: #16161e;
-      --text: #d0d0e0;
-      --accent: #ff79c6;
-      --shadow: 0 6px 20px rgba(0,0,0,0.7);
-    }
-    * { margin:0; padding:0; box-sizing:border-box; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, sans-serif;
-      min-height: 100vh;
-      padding: 1.5rem;
-      text-align: center;
-    }
-    header {
-      margin: 2rem 0 3rem;
-    }
-    h1 {
-      color: var(--accent);
-      font-size: 2.5rem;
-      margin-bottom: 0.5rem;
-    }
-    #status {
-      color: #888;
-      margin: 2rem 0;
-      font-size: 1.2rem;
-      white-space: pre-wrap;
-    }
-    .masonry {
-      column-count: 2;
-      column-gap: 1rem;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-    @media (min-width: 768px) { .masonry { column-count: 3; } }
-    @media (min-width: 1024px) { .masonry { column-count: 4; } }
-    .item {
-      break-inside: avoid;
-      margin-bottom: 1rem;
-      border-radius: 12px;
-      overflow: hidden;
-      background: var(--card);
-      box-shadow: var(--shadow);
-      opacity: 0;
-      transform: translateY(30px);
-      transition: all 0.4s ease;
-    }
-    .item.visible {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    img, video {
-      width: 100%;
-      height: auto;
-      display: block;
-    }
-    video {
-      background: #000;
-    }
-    #loadMore {
-      margin: 3rem auto 1rem;
-      padding: 0.9rem 2.5rem;
-      font-size: 1.1rem;
-      background: var(--accent);
-      color: #000;
-      border: none;
-      border-radius: 999px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-    #loadMore:hover:not(:disabled) { transform: scale(1.05); }
-    #loadMore:disabled { opacity: 0.5; cursor: not-allowed; }
+    :root { --bg:#000; --text:#ddd; --accent:#ff79c6; --card:#111; }
+    body { background:var(--bg); color:var(--text); margin:0; padding:20px; font-family:system-ui,sans-serif; text-align:center; }
+    h1 { color:var(--accent); margin:1em 0; }
+    #status { color:#888; margin:2em; font-size:1.2em; white-space:pre-wrap; }
+    .gallery { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; max-width:1800px; margin:0 auto; }
+    .item { background:var(--card); border-radius:10px; overflow:hidden; box-shadow:0 4px 12px #000; transition:0.2s; opacity:0; transform:translateY(30px); }
+    .item.visible { opacity:1; transform:translateY(0); }
+    .item:hover { transform:scale(1.04); }
+    img { width:100%; height:auto; display:block; }
+    #loadMore { margin:3em auto; padding:14px 40px; font-size:1.2em; background:var(--accent); color:#000; border:none; border-radius:50px; cursor:pointer; }
+    #loadMore:disabled { opacity:0.4; cursor:not-allowed; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>🐱 Cats Gallery – Photos & Videos 🐾</h1>
-    <p style="color:#777; font-size:1.1rem;">Thousands of moments, forever</p>
-  </header>
+  <h1>🐱 Cats Collection – Thousands Forever 🐾</h1>
+  <div id="status">Loading thousands of cats... (this may take 10–60 sec for big collections)</div>
 
-  <div id="status">Loading your cat universe... (may take 10–90 sec for large collections)</div>
-
-  <div class="masonry" id="masonry"></div>
-  <button id="loadMore" disabled>Load more</button>
+  <div class="gallery" id="gallery"></div>
+  <button id="loadMore" disabled>Loading more...</button>
 
   <script>
     const CONFIG = {
-      owner: 'tooter9',
-      repo:  'Youvideo',
-      branch: 'main',           // поменяй на 'master' если нужно
-      basePaths: ['cats/'],     // ['cats/', 'videos/'] если видео отдельно
-      token: ''                 // ← вставь сюда PAT: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
+      owner: 'tooter9',                    // ← твой логин (уже правильный?)
+      repo:  'Youvideo',                   // ← имя репозитория (Youvideo)
+      branch: 'main',                      // обычно main или master
+      basePaths: ['cats/'],                // добавь ['cats/', 'cats-extra/'] если разбил на подпапки
+      extensions: /\.(jpe?g|png|gif|webp)$/i,
+      token: ''                            // ← если есть PAT: 'ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' (не коммить в публичный код!)
     };
 
-    let mediaItems = [];
-    let shown = 0;
-    const BATCH_SIZE = 40; // меньше для видео – лучше производительность
+    let allFiles = [];
+    let displayed = 0;
+    const BATCH = 60;
 
-    const masonry = document.getElementById('masonry');
+    const gallery = document.getElementById('gallery');
     const status = document.getElementById('status');
     const btn = document.getElementById('loadMore');
 
-    function cacheGet() {
+    function getCache() {
       try {
-        const data = localStorage.getItem('catMediaCache');
-        const time = localStorage.getItem('catMediaTime');
-        if (data && Date.now() - time < 7 * 86400000) return JSON.parse(data);
+        const c = localStorage.getItem('catsCache');
+        const t = localStorage.getItem('catsCacheTime');
+        if (c && Date.now() - t < 7*24*60*60*1000) return JSON.parse(c);
       } catch {}
       return null;
     }
 
-    async function fetchMedia() {
+    async function fetchList() {
+      status.textContent = 'Fetching file list from GitHub API...';
       const headers = CONFIG.token ? { Authorization: `token ${CONFIG.token}` } : {};
       try {
-        const refRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`, {headers});
-        const ref = await refRes.json();
-        if (ref.message) throw new Error(ref.message || 'API error');
+        const ref = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`, {headers}).then(r=>r.json());
+        if (ref.message) throw new Error(ref.message);
+        const sha = ref.object.sha;
 
-        const treeRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/${ref.object.sha}?recursive=1`, {headers});
-        const treeData = await treeRes.json();
-        if (treeData.message) throw new Error(treeData.message);
+        const tree = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/${sha}?recursive=1`, {headers}).then(r=>r.json());
+        if (tree.message) throw new Error(tree.message);
 
-        if (treeData.truncated) {
-          status.textContent = 'Collection huge → truncated. Split folders: cats/1/, cats/2/ etc.';
+        if (tree.truncated) {
+          status.innerHTML = '⚠️ Too many files (truncated by GitHub). Split photos into subfolders:\n• cats/1/\n• cats/2/\n etc. (max ~800 per folder)';
         }
 
-        mediaItems = treeData.tree
-          .filter(f => f.type === 'blob')
-          .filter(f => {
-            const p = f.path.toLowerCase();
-            return CONFIG.basePaths.some(bp => p.startsWith(bp)) &&
-                   /\.(jpe?g|png|gif|webp|mp4|webm)$/i.test(p);
-          })
-          .map(f => ({
-            path: f.path,
-            isVideo: /\.(mp4|webm)$/i.test(f.path)
-          }));
+        allFiles = [];
+        tree.tree.forEach(item => {
+          if (item.type === 'blob' && CONFIG.extensions.test(item.path)) {
+            for (const bp of CONFIG.basePaths) {
+              if (item.path.startsWith(bp)) {
+                allFiles.push(item.path);
+                break;
+              }
+            }
+          }
+        });
 
-        mediaItems.sort((a,b) => a.path.localeCompare(b.path));
+        allFiles.sort(); // по имени файла
 
-        localStorage.setItem('catMediaCache', JSON.stringify(mediaItems));
-        localStorage.setItem('catMediaTime', Date.now());
+        localStorage.setItem('catsCache', JSON.stringify(allFiles));
+        localStorage.setItem('catsCacheTime', Date.now());
 
-        status.textContent = `Found ${mediaItems.length} items (photos + videos)!`;
-      } catch (err) {
-        status.textContent = `Error: ${err.message}\n\nFixes:\n• Repo public?\n• Token added?\n• Branch correct?\n• Wait API limit (1h)`;
-        mediaItems = cacheGet() || [];
-        if (mediaItems.length) status.innerHTML += `\n\nCache used: ${mediaItems.length} items`;
+        status.textContent = `Found ${allFiles.length} cat photos! Rendering...`;
+      } catch (e) {
+        status.textContent = `Error: ${e.message}\n\nPossible fixes:\n1. Check if repo is public\n2. Wait 1 hour (API limit)\n3. Add token in CONFIG.token\n4. Use cache below if available`;
+        allFiles = getCache() || [];
+        if (allFiles.length) status.innerHTML += `\n\nUsing cached list (${allFiles.length} items)`;
       }
     }
 
-    function addBatch() {
-      const end = Math.min(shown + BATCH_SIZE, mediaItems.length);
-      for (let i = shown; i < end; i++) {
-        const item = mediaItems[i];
-        const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${item.path}`;
+    function renderNextBatch() {
+      const end = Math.min(displayed + BATCH, allFiles.length);
+      for (let i = displayed; i < end; i++) {
+        const path = allFiles[i];
+        const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
 
-        const el = document.createElement('div');
-        el.className = 'item';
+        const div = document.createElement('div');
+        div.className = 'item';
 
-        if (item.isVideo) {
-          const vid = document.createElement('video');
-          vid.src = url;
-          vid.controls = true;
-          vid.preload = 'none';       // lazy для видео
-          vid.loading = 'lazy';
-          vid.playsInline = true;
-          vid.muted = true;           // для автоплея в некоторых браузерах
-          el.appendChild(vid);
-        } else {
-          const img = new Image();
-          img.src = url;
-          img.alt = item.path.split('/').pop().replace(/\.[^/.]+$/, '');
-          img.loading = 'lazy';
-          img.decoding = 'async';
-          img.onerror = () => el.remove();
-          el.appendChild(img);
-        }
+        const img = new Image();
+        img.src = url;
+        img.alt = path.split('/').pop().replace(/\.[^/.]+$/, '');
+        img.loading = 'lazy';
+        img.onerror = () => div.remove();
 
-        masonry.appendChild(el);
-        setTimeout(() => el.classList.add('visible'), 50 * (i - shown));
+        div.appendChild(img);
+        gallery.appendChild(div);
+
+        setTimeout(() => div.classList.add('visible'), 30 * (i - displayed));
       }
-      shown = end;
+      displayed = end;
 
-      status.textContent = `Displayed ${shown} / ${mediaItems.length}`;
-      btn.disabled = shown >= mediaItems.length;
-      btn.textContent = btn.disabled ? 'All loaded 🐱💕' : 'More cats & videos';
+      status.textContent = `Showing ${displayed} / ${allFiles.length}`;
+      btn.disabled = displayed >= allFiles.length;
+      btn.textContent = btn.disabled ? 'All cats loaded 🐱' : 'Load more cats';
     }
 
-    const observer = new IntersectionObserver(ent => {
-      if (ent[0].isIntersecting && shown < mediaItems.length) addBatch();
-    }, { rootMargin: '400px' });
-    observer.observe(btn);
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && displayed < allFiles.length) renderNextBatch();
+    });
+    obs.observe(btn);
 
     (async () => {
-      mediaItems = cacheGet();
-      if (!mediaItems?.length) await fetchMedia();
-      else status.textContent = `Cache: ${mediaItems.length} items (refresh to update)`;
+      allFiles = getCache();
+      if (!allFiles?.length) await fetchList();
+      else status.textContent = `Loaded ${allFiles.length} cats from cache (refresh page to update)`;
 
-      if (mediaItems.length > 0) {
-        addBatch();
+      if (allFiles.length > 0) {
+        renderNextBatch();
         btn.disabled = false;
-        btn.textContent = 'More cats & videos';
+        btn.textContent = 'Load more cats';
       } else {
-        status.innerHTML += '\n\nNo media found in cats/ folder(s). Upload & refresh.';
+        status.innerHTML += '\n\nNo photos found. Upload to /cats/ folder and refresh.';
       }
     })();
 
-    btn.onclick = addBatch;
+    btn.onclick = renderNextBatch;
   </script>
 </body>
 </html>
