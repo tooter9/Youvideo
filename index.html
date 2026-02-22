@@ -36,35 +36,38 @@
     }
 
     header {
-      margin-bottom: 30px;
+      margin-bottom: 25px;
       width: 100%;
       max-width: 900px;
     }
 
     h1 {
-      font-size: 4.1rem;
-      line-height: 0.88;
+      font-size: 3.5rem;
+      line-height: 0.92;
       color: var(--accent-lime);
       text-shadow: 
-        0 0 22px var(--accent-pink),
-        7px 7px 0 #000,
+        0 0 20px var(--accent-pink),
+        0 0 8px var(--accent-lime),
+        5px 5px 0 #000,
         -3px -3px 0 #000;
-      letter-spacing: 6px;
-      -webkit-text-stroke: 3.5px #000;
+      letter-spacing: 4px;
+      -webkit-text-stroke: 2.8px #000;
     }
 
     .viewer-container {
       width: 100%;
       max-width: 900px;
       margin: 0 auto 35px;
-      padding: 20px;
+      padding: 22px;
       background: var(--dark);
-      border: 14px solid #000;
+      border: 10px solid #000;
       box-shadow: 
-        0 0 0 18px var(--accent-pink),
-        0 0 70px var(--glow),
-        inset 0 0 55px rgba(0, 0, 0, 0.9);
-      border-radius: 6px;
+        0 0 0 8px var(--accent-pink),
+        0 0 0 16px var(--accent-lime),
+        0 0 0 22px #000,
+        0 0 65px var(--glow),
+        inset 0 0 50px rgba(0, 0, 0, 0.88);
+      border-radius: 4px;
       position: relative;
     }
 
@@ -76,7 +79,7 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
-      border: 7px solid #111;
+      border: 8px solid #111;
       position: relative;
     }
 
@@ -140,7 +143,7 @@
     }
 
     .status {
-      margin: 18px 0 8px;
+      margin: 18px 0 12px;
       color: #888;
       font-size: 0.9rem;
       letter-spacing: 1.5px;
@@ -151,15 +154,16 @@
       max-width: 900px;
       margin: 0 auto;
       display: flex;
-      gap: 25px;
+      gap: 28px;
       justify-content: center;
       flex-wrap: wrap;
+      align-items: center;
     }
 
     button {
       font-family: 'Press Start 2P', monospace;
-      font-size: 1.2rem;
-      padding: 19px 42px;
+      font-size: 1.22rem;
+      padding: 19px 38px;
       border: 7px solid #fff;
       background: #000;
       color: #fff;
@@ -168,6 +172,7 @@
       box-shadow: 7px 7px 0 #fff;
       text-transform: uppercase;
       letter-spacing: 2px;
+      min-width: 160px;
     }
 
     button:hover:not(:disabled) {
@@ -191,12 +196,14 @@
     }
 
     #nextBtn {
-      font-size: 1.6rem;
-      padding: 26px 68px;
+      font-size: 1.38rem;
+      padding: 26px 52px;
       background: linear-gradient(45deg, var(--accent-lime), #00ff88);
       color: #000;
       border-color: #000;
       box-shadow: 8px 8px 0 #000;
+      min-width: 340px;
+      line-height: 1.25;
     }
 
     #nextBtn:hover:not(:disabled) {
@@ -205,10 +212,11 @@
     }
 
     @media (max-width: 768px) {
-      h1 { font-size: 2.85rem; letter-spacing: 4px; }
+      h1 { font-size: 2.6rem; letter-spacing: 3px; }
       #viewer { min-height: 390px; }
-      button { padding: 16px 28px; font-size: 1.05rem; }
-      #nextBtn { padding: 22px 52px; font-size: 1.35rem; }
+      button { padding: 17px 26px; font-size: 1.08rem; min-width: 130px; }
+      #nextBtn { padding: 23px 38px; font-size: 1.28rem; min-width: 260px; }
+      .controls { gap: 20px; }
     }
   </style>
 </head>
@@ -351,7 +359,7 @@
       setTimeout(() => { media.style.opacity = '1'; }, 30);
 
       setTimeout(() => {
-        statusEl.textContent = `${allFiles.length} LEGENDARY CATS READY`;
+        statusEl.textContent = '';
         setLoading(false);
       }, 800);
     }
@@ -393,7 +401,7 @@
           )
           .map(item => item.path);
 
-        allFiles.sort(() => Math.random() - 0.5);
+        // Убрали пред-сортировку — теперь каждый клик = чистый рандом
         saveCache(allFiles);
       } catch (e) {
         console.error(e);
