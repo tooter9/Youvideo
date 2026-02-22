@@ -324,6 +324,10 @@ footer{
       <div id="folderBadges"></div>
     </div>
     <div class="toolbar-right">
+      <button id="refreshBtn" class="btn btn-accent" title="Clear cache and reload">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Refresh
+      </button>
       <div class="scroll-controls">
         <button id="scrollTopBtn" class="btn" title="Scroll to top">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
@@ -345,7 +349,11 @@ footer{
         <polyline points="21 15 16 10 5 21"/>
       </svg>
       <strong>No images found</strong>
-      <p>Add cat images to the cats/ folder, then run node build.js to generate the manifest.</p>
+      <p>Add cat images to the cats/ folder, then push to GitHub. The Action will generate the manifest automatically.</p>
+      <button id="emptyRefreshBtn" class="btn btn-accent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+        Clear Cache &amp; Reload
+      </button>
     </div>
   </div>
 
@@ -371,7 +379,7 @@ footer{
 
 var MANIFEST_URL = "cats-manifest.json";
 var CACHE_KEY = "comg_manifest";
-var CACHE_TTL = 24 * 60 * 60 * 1000;
+var CACHE_TTL = 60 * 60 * 1000;
 
 var gallery = document.getElementById("gallery");
 var selectedIds = new Set();
@@ -382,6 +390,15 @@ var autoScrollId = null;
 var scrollSpeed = 0.6;
 var longPressTimer = null;
 var longPressFired = false;
+
+function getBaseUrl() {
+  var path = window.location.pathname;
+  var lastSlash = path.lastIndexOf("/");
+  if (lastSlash > 0) {
+    return path.substring(0, lastSlash + 1);
+  }
+  return "/";
+}
 
 function getCachedManifest() {
   try {
@@ -404,22 +421,40 @@ function cacheManifest(data) {
   } catch (e) {}
 }
 
-async function loadManifest() {
-  var cached = getCachedManifest();
-  if (cached) {
-    setStatus("Loaded from cache");
-    return cached;
+function clearCache() {
+  try {
+    localStorage.removeItem(CACHE_KEY);
+  } catch (e) {}
+}
+
+async function loadManifest(skipCache) {
+  if (!skipCache) {
+    var cached = getCachedManifest();
+    if (cached && cached.images && cached.images.length > 0) {
+      setStatus("Loaded from cache");
+      return cached;
+    }
   }
 
+  clearCache();
+
   try {
-    var res = await fetch(MANIFEST_URL + "?_=" + Date.now());
+    var baseUrl = getBaseUrl();
+    var url = baseUrl + MANIFEST_URL + "?_=" + Date.now();
+    var res = await fetch(url);
     if (!res.ok) throw new Error(res.status.toString());
     var data = await res.json();
-    cacheManifest(data);
+    if (data.images && data.images.length > 0) {
+      var fixedImages = data.images.map(function(img) {
+        return baseUrl + img;
+      });
+      data.images = fixedImages;
+      cacheManifest(data);
+    }
     setStatus("Manifest loaded");
     return data;
   } catch (e) {
-    setStatus("Manifest not found");
+    setStatus("Manifest not found - check deployment");
     return { folders: [], images: [] };
   }
 }
@@ -604,7 +639,7 @@ async function downloadSelected() {
 }
 
 function tweetImage(path) {
-  var fullUrl = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/") + path;
+  var fullUrl = window.location.origin + path;
   var text = encodeURIComponent("Check out this cat! #CatOhMyGod #Cats");
   var url = encodeURIComponent(fullUrl);
   window.open("https://twitter.com/intent/tweet?text=" + text + "&url=" + url, "_blank", "noopener");
@@ -646,6 +681,24 @@ function toggleAutoScroll() {
   }
 }
 
+async function forceRefresh() {
+  clearCache();
+  setStatus("Refreshing...");
+  gallery.innerHTML = "";
+  document.getElementById("emptyState").classList.remove("visible");
+  var manifest = await loadManifest(true);
+  allPaths = manifest.images || [];
+  var folders = manifest.folders || [];
+  renderFolderBadges(folders);
+  updateImageCount();
+  renderGallery(allPaths);
+  if (allPaths.length === 0) {
+    setStatus("No images - check that cats/ folder has images and Action ran");
+  } else {
+    setStatus("Refreshed - " + allPaths.length + " images loaded");
+  }
+}
+
 gallery.addEventListener("pointerenter", function () {
   if (autoScrollEnabled) stopAutoScroll();
 });
@@ -681,16 +734,24 @@ document.getElementById("shuffleBtn").addEventListener("click", function () {
   setStatus("Shuffled");
 });
 
+document.getElementById("refreshBtn").addEventListener("click", function () {
+  forceRefresh();
+});
+
+document.getElementById("emptyRefreshBtn").addEventListener("click", function () {
+  forceRefresh();
+});
+
 document.addEventListener("DOMContentLoaded", async function () {
   setStatus("Loading...");
-  var manifest = await loadManifest();
+  var manifest = await loadManifest(false);
   allPaths = manifest.images || [];
   var folders = manifest.folders || [];
   renderFolderBadges(folders);
   updateImageCount();
   renderGallery(allPaths);
   if (allPaths.length === 0) {
-    setStatus("No images - run build.js");
+    setStatus("No images - click Refresh or check deployment");
   }
 });
 </script>

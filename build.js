@@ -28,6 +28,7 @@ function scanFolder(folderName) {
     var entries = fs.readdirSync(dir);
     for (var i = 0; i < entries.length; i++) {
       var name = entries[i];
+      if (name.startsWith(".")) continue;
       var full = path.join(dir, name);
       var stat = fs.statSync(full);
       if (stat.isDirectory()) {
