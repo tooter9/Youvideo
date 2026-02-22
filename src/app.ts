@@ -1,302 +1,301 @@
-interface CatImage {
-  id: string;
-  url: string;
-  width: number;
-  height: number;
+interface Manifest {
+  folders: string[];
+  images: string[];
+  generatedAt: string;
 }
 
 interface CacheEntry {
-  images: CatImage[];
-  timestamp: number;
+  data: Manifest;
+  ts: number;
 }
 
-const CACHE_KEY = 'minecraft_cats_cache';
-const CACHE_DURATION = 30 * 60 * 1000;
-const BATCH_SIZE = 25;
-const API_URL = 'https://api.thecatapi.com/v1/images/search';
+const MANIFEST_URL: string = "cats-manifest.json";
+const CACHE_KEY: string = "comg_manifest";
+const CACHE_TTL: number = 24 * 60 * 60 * 1000;
 
-class CatGallery {
-  private container: HTMLElement;
-  private selectedIds: Set<string> = new Set();
-  private allImages: CatImage[] = [];
-  private isSelectMode: boolean = false;
-  private isLoading: boolean = false;
-  private scrollSpeed: number = 0.5;
-  private animationId: number | null = null;
+class Gallery {
+  private el: HTMLElement;
+  private paths: string[] = [];
+  private selected: Set<string> = new Set();
+  private selectMode: boolean = false;
+  private scrolling: boolean = false;
+  private scrollId: number | null = null;
+  private scrollSpeed: number = 0.6;
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
+  private longPressFired: boolean = false;
 
   constructor() {
-    this.container = document.getElementById('gallery')!;
-    this.init();
+    this.el = document.getElementById("gallery")!;
+    this.bind();
+    this.load();
   }
 
-  private async init(): Promise<void> {
-    this.setupEventListeners();
-    await this.loadImages();
-    this.startAutoScroll();
-  }
-
-  private getCache(): CacheEntry | null {
+  private getCached(): Manifest | null {
     try {
       const raw = localStorage.getItem(CACHE_KEY);
       if (!raw) return null;
       const entry: CacheEntry = JSON.parse(raw);
-      if (Date.now() - entry.timestamp > CACHE_DURATION) {
+      if (Date.now() - entry.ts > CACHE_TTL) {
         localStorage.removeItem(CACHE_KEY);
         return null;
       }
-      return entry;
+      return entry.data;
     } catch {
       return null;
     }
   }
 
-  private setCache(images: CatImage[]): void {
-    const entry: CacheEntry = { images, timestamp: Date.now() };
+  private cache(data: Manifest): void {
     try {
-      localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
-    } catch {
-      console.warn('Cache storage failed');
-    }
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() }));
+    } catch {}
   }
 
-  private async fetchCats(count: number = BATCH_SIZE): Promise<CatImage[]> {
-    const cached = this.getCache();
-    if (cached && cached.images.length >= count) {
-      return cached.images;
+  private async fetchManifest(): Promise<Manifest> {
+    const cached = this.getCached();
+    if (cached) {
+      this.setStatus("Loaded from cache");
+      return cached;
     }
 
     try {
-      const res = await fetch(`${API_URL}?limit=${count}&size=small`);
-      if (!res.ok) throw new Error(`API error: ${res.status}`);
-      const data: CatImage[] = await res.json();
-      
-      const merged = [...(cached?.images || [])];
-      const existingIds = new Set(merged.map(i => i.id));
-      for (const img of data) {
-        if (!existingIds.has(img.id)) {
-          merged.push(img);
-          existingIds.add(img.id);
-        }
-      }
-      this.setCache(merged);
+      const res = await fetch(`${MANIFEST_URL}?_=${Date.now()}`);
+      if (!res.ok) throw new Error(String(res.status));
+      const data: Manifest = await res.json();
+      this.cache(data);
+      this.setStatus("Manifest loaded");
       return data;
-    } catch (err) {
-      console.error('Fetch failed:', err);
-      return cached?.images || [];
+    } catch {
+      this.setStatus("Manifest not found");
+      return { folders: [], images: [], generatedAt: "" };
     }
   }
 
-  private async loadImages(): Promise<void> {
-    if (this.isLoading) return;
-    this.isLoading = true;
-    this.showLoading(true);
-
-    const images = await this.fetchCats(BATCH_SIZE);
-    this.allImages.push(...images);
-    this.renderImages(images);
-
-    this.showLoading(false);
-    this.isLoading = false;
+  private async load(): Promise<void> {
+    this.setStatus("Loading...");
+    const manifest = await this.fetchManifest();
+    this.paths = manifest.images;
+    this.renderBadges(manifest.folders);
+    this.updateCount();
+    this.render();
+    if (this.paths.length === 0) this.setStatus("No images - run build.js");
   }
 
-  private renderImages(images: CatImage[]): void {
-    for (const img of images) {
-      const card = this.createCard(img);
-      this.container.appendChild(card);
+  private setStatus(text: string): void {
+    document.getElementById("statusText")!.textContent = text;
+  }
+
+  private updateCount(): void {
+    document.getElementById("imageCount")!.textContent = `${this.paths.length} images`;
+  }
+
+  private renderBadges(folders: string[]): void {
+    const container = document.getElementById("folderBadges")!;
+    container.innerHTML = "";
+    folders.forEach((f) => {
+      const span = document.createElement("span");
+      span.className = "folder-badge";
+      span.textContent = f;
+      container.appendChild(span);
+    });
+  }
+
+  private render(): void {
+    this.el.innerHTML = "";
+    if (this.paths.length === 0) {
+      document.getElementById("emptyState")!.classList.add("visible");
+      return;
     }
+    document.getElementById("emptyState")!.classList.remove("visible");
+    const frag = document.createDocumentFragment();
+    this.paths.forEach((p, i) => frag.appendChild(this.card(p, i)));
+    this.el.appendChild(frag);
   }
 
-  private createCard(cat: CatImage): HTMLElement {
-    const card = document.createElement('div');
-    card.className = 'cat-card';
-    card.dataset.id = cat.id;
+  private card(path: string, index: number): HTMLElement {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.index = String(index);
+    card.dataset.path = path;
 
-    const img = document.createElement('img');
-    img.src = cat.url;
-    img.alt = 'Cat';
-    img.loading = 'lazy';
+    const img = document.createElement("img");
+    img.src = path;
+    img.alt = "";
+    img.loading = "lazy";
     img.draggable = false;
+    img.onerror = () => { card.style.display = "none"; };
 
-    const overlay = document.createElement('div');
-    overlay.className = 'card-overlay';
+    const actions = document.createElement("div");
+    actions.className = "card-actions";
 
-    const checkbox = document.createElement('div');
-    checkbox.className = 'card-checkbox';
-    checkbox.innerHTML = '&#10003;';
+    const check = document.createElement("div");
+    check.className = "card-check";
+    check.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>';
 
-    const tweetBtn = document.createElement('button');
-    tweetBtn.className = 'tweet-btn';
-    tweetBtn.innerHTML = '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>';
-    tweetBtn.title = 'Tweet this cat';
-    tweetBtn.addEventListener('click', (e) => {
+    const tweet = document.createElement("button");
+    tweet.className = "card-tweet";
+    tweet.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>';
+    tweet.addEventListener("click", (e) => {
       e.stopPropagation();
-      this.tweetCat(cat);
+      e.preventDefault();
+      this.tweet(path);
     });
 
-    overlay.appendChild(checkbox);
-    overlay.appendChild(tweetBtn);
+    actions.appendChild(check);
+    actions.appendChild(tweet);
     card.appendChild(img);
-    card.appendChild(overlay);
+    card.appendChild(actions);
 
-    let pressTimer: ReturnType<typeof setTimeout> | null = null;
-
-    card.addEventListener('pointerdown', () => {
-      pressTimer = setTimeout(() => {
-        if (!this.isSelectMode) this.toggleSelectMode();
-        this.toggleSelect(card, cat.id);
+    card.addEventListener("pointerdown", (e: PointerEvent) => {
+      if (e.button !== 0) return;
+      this.longPressFired = false;
+      this.longPressTimer = setTimeout(() => {
+        this.longPressFired = true;
+        if (!this.selectMode) this.enterSelect();
+        this.toggle(card, path);
       }, 500);
     });
 
-    card.addEventListener('pointerup', () => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
+    card.addEventListener("pointerup", () => this.clearLongPress());
+    card.addEventListener("pointercancel", () => this.clearLongPress());
+    card.addEventListener("pointermove", () => this.clearLongPress());
 
-    card.addEventListener('pointerleave', () => {
-      if (pressTimer) clearTimeout(pressTimer);
-    });
-
-    card.addEventListener('click', () => {
-      if (this.isSelectMode) {
-        this.toggleSelect(card, cat.id);
-      }
+    card.addEventListener("click", (e) => {
+      if (this.longPressFired) { e.preventDefault(); return; }
+      if (this.selectMode) { e.preventDefault(); this.toggle(card, path); }
     });
 
     return card;
   }
 
-  private toggleSelect(card: HTMLElement, id: string): void {
-    if (this.selectedIds.has(id)) {
-      this.selectedIds.delete(id);
-      card.classList.remove('selected');
+  private clearLongPress(): void {
+    if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
+  }
+
+  private toggle(card: HTMLElement, path: string): void {
+    if (this.selected.has(path)) {
+      this.selected.delete(path);
+      card.classList.remove("selected");
     } else {
-      this.selectedIds.add(id);
-      card.classList.add('selected');
+      this.selected.add(path);
+      card.classList.add("selected");
     }
-    this.updateSelectionUI();
+    this.refreshUI();
   }
 
-  private toggleSelectMode(): void {
-    this.isSelectMode = !this.isSelectMode;
-    document.body.classList.toggle('select-mode', this.isSelectMode);
-    const btn = document.getElementById('selectBtn')!;
-    btn.textContent = this.isSelectMode ? 'Cancel' : 'Select';
-    
-    if (!this.isSelectMode) {
-      this.clearSelection();
-    }
-    this.updateSelectionUI();
+  private enterSelect(): void {
+    this.selectMode = true;
+    document.body.classList.add("select-mode");
   }
 
-  private clearSelection(): void {
-    this.selectedIds.clear();
-    document.querySelectorAll('.cat-card.selected').forEach(el => {
-      el.classList.remove('selected');
-    });
+  private exitSelect(): void {
+    this.selectMode = false;
+    document.body.classList.remove("select-mode");
+    this.selected.clear();
+    this.el.querySelectorAll(".card.selected").forEach((el) => el.classList.remove("selected"));
+    this.refreshUI();
   }
 
-  private updateSelectionUI(): void {
-    const counter = document.getElementById('selectionCount')!;
-    const downloadBtn = document.getElementById('downloadBtn')!;
-    const count = this.selectedIds.size;
-    counter.textContent = count > 0 ? `${count} selected` : '';
-    downloadBtn.style.display = count > 0 ? 'flex' : 'none';
+  private refreshUI(): void {
+    const counter = document.getElementById("selectionCount")!;
+    const dlBtn = document.getElementById("downloadBtn") as HTMLButtonElement;
+    const count = this.selected.size;
+    counter.textContent = count > 0 ? `${count} selected` : "";
+    dlBtn.style.display = count > 0 ? "inline-flex" : "none";
   }
 
-  private async downloadSelected(): Promise<void> {
-    if (this.selectedIds.size === 0) return;
-
-    const downloadBtn = document.getElementById('downloadBtn')!;
-    downloadBtn.textContent = 'Packing...';
-    downloadBtn.setAttribute('disabled', 'true');
+  private async download(): Promise<void> {
+    if (this.selected.size === 0) return;
+    const dlBtn = document.getElementById("downloadBtn") as HTMLButtonElement;
+    dlBtn.textContent = "Packing...";
+    dlBtn.disabled = true;
+    this.setStatus("Creating ZIP...");
 
     try {
-      const JSZip = (window as any).JSZip;
-      const zip = new JSZip();
-
-      const selectedImages = this.allImages.filter(img => this.selectedIds.has(img.id));
-
-      await Promise.all(selectedImages.map(async (img, i) => {
-        try {
-          const res = await fetch(img.url);
-          const blob = await res.blob();
-          const ext = img.url.split('.').pop()?.split('?')[0] || 'jpg';
-          zip.file(`cat_${i + 1}.${ext}`, blob);
-        } catch {
-          console.warn(`Failed to fetch: ${img.url}`);
-        }
-      }));
-
-      const content = await zip.generateAsync({ type: 'blob' });
+      const zip = new (window as any).JSZip();
+      const arr = Array.from(this.selected);
+      await Promise.all(arr.map((p, i) =>
+        fetch(p).then((r) => r.blob()).then((blob) => {
+          const name = p.split("/").pop() || `cat_${i + 1}.jpg`;
+          zip.file(name, blob);
+        }).catch(() => {})
+      ));
+      const content = await zip.generateAsync({ type: "blob" });
       const url = URL.createObjectURL(content);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = 'minecraft_cats.zip';
+      a.download = "cat_oh_my_god.zip";
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('ZIP creation failed:', err);
-      alert('Failed to create ZIP. Please try again.');
+      this.setStatus("ZIP downloaded");
+    } catch {
+      this.setStatus("ZIP failed");
     }
 
-    downloadBtn.textContent = 'Download ZIP';
-    downloadBtn.removeAttribute('disabled');
+    dlBtn.textContent = "Download ZIP";
+    dlBtn.disabled = false;
   }
 
-  private tweetCat(cat: CatImage): void {
-    const text = encodeURIComponent('Check out this cute cat! 🐱 #MinecraftCats #CatsOfTwitter');
-    const url = encodeURIComponent(cat.url);
-    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, '_blank');
+  private tweet(path: string): void {
+    const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
+    const full = base + path;
+    const text = encodeURIComponent("Check out this cat! #CatOhMyGod #Cats");
+    const url = encodeURIComponent(full);
+    window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "noopener");
   }
 
-  private startAutoScroll(): void {
-    const scroll = (): void => {
-      this.container.scrollTop += this.scrollSpeed;
-      
-      if (this.container.scrollTop + this.container.clientHeight >= this.container.scrollHeight - 200) {
-        this.loadImages();
-      }
-      
-      this.animationId = requestAnimationFrame(scroll);
+  private shuffle(): void {
+    for (let i = this.paths.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [this.paths[i], this.paths[j]] = [this.paths[j], this.paths[i]];
+    }
+    this.render();
+    this.setStatus("Shuffled");
+  }
+
+  private startScroll(): void {
+    if (this.scrollId) return;
+    const tick = (): void => {
+      this.el.scrollTop += this.scrollSpeed;
+      this.scrollId = requestAnimationFrame(tick);
     };
-    this.animationId = requestAnimationFrame(scroll);
-
-    this.container.addEventListener('mouseenter', () => {
-      if (this.animationId) {
-        cancelAnimationFrame(this.animationId);
-        this.animationId = null;
-      }
-    });
-
-    this.container.addEventListener('mouseleave', () => {
-      if (!this.animationId) {
-        this.animationId = requestAnimationFrame(scroll);
-      }
-    });
+    this.scrollId = requestAnimationFrame(tick);
   }
 
-  private showLoading(show: boolean): void {
-    const loader = document.getElementById('loader')!;
-    loader.style.display = show ? 'flex' : 'none';
+  private stopScroll(): void {
+    if (this.scrollId) { cancelAnimationFrame(this.scrollId); this.scrollId = null; }
   }
 
-  private setupEventListeners(): void {
-    document.getElementById('selectBtn')!.addEventListener('click', () => {
-      this.toggleSelectMode();
-    });
+  private toggleScroll(): void {
+    this.scrolling = !this.scrolling;
+    const btn = document.getElementById("scrollToggle")!;
+    if (this.scrolling) {
+      this.startScroll();
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+    } else {
+      this.stopScroll();
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Auto';
+    }
+  }
 
-    document.getElementById('downloadBtn')!.addEventListener('click', () => {
-      this.downloadSelected();
+  private bind(): void {
+    document.getElementById("selectBtn")!.addEventListener("click", () => {
+      if (this.selectMode) this.exitSelect(); else this.enterSelect();
     });
+    document.getElementById("downloadBtn")!.addEventListener("click", () => this.download());
+    document.getElementById("scrollTopBtn")!.addEventListener("click", () => {
+      this.el.scrollTo({ top: 0, behavior: "smooth" });
+    });
+    document.getElementById("scrollToggle")!.addEventListener("click", () => this.toggleScroll());
+    document.getElementById("shuffleBtn")!.addEventListener("click", () => this.shuffle());
 
-    document.getElementById('refreshBtn')!.addEventListener('click', async () => {
-      localStorage.removeItem(CACHE_KEY);
-      this.container.innerHTML = '';
-      this.allImages = [];
-      await this.loadImages();
-    });
+    this.el.addEventListener("pointerenter", () => { if (this.scrolling) this.stopScroll(); });
+    this.el.addEventListener("pointerleave", () => { if (this.scrolling) this.startScroll(); });
+    this.el.addEventListener("touchstart", () => { if (this.scrolling) this.stopScroll(); }, { passive: true });
+    this.el.addEventListener("touchend", () => { if (this.scrolling) setTimeout(() => this.startScroll(), 2000); });
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  new CatGallery();
-});
+document.addEventListener("DOMContentLoaded", () => new Gallery());
