@@ -1,456 +1,903 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CAT OH MY GOD</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minecraft Cats</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
     :root {
-      --bg: #0b0814;
-      --accent-pink: #ff00ff;
-      --accent-lime: #39ff14;
-      --accent-cyan: #00ffff;
-      --dark: #1a1433;
-      --glow: rgba(255, 0, 255, 0.35);
+      --dirt-brown: #8B6914;
+      --dirt-dark: #6B4F12;
+      --grass-green: #5D8C3E;
+      --grass-light: #7EC850;
+      --stone-gray: #7F7F7F;
+      --stone-dark: #5A5A5A;
+      --bedrock: #1a1a2e;
+      --obsidian: #0f0f23;
+      --diamond: #4AEDD9;
+      --gold: #FCDB05;
+      --redstone: #FF3333;
+      --emerald: #17DD62;
+      --text-light: #E8E8E8;
+      --text-dim: #9A9A9A;
+      --border-pixel: 4px;
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @keyframes grassSway {
+      0%, 100% { background-position: 0 0; }
+      50% { background-position: 2px -1px; }
+    }
 
     body {
-      background: var(--bg);
-      color: #fff;
       font-family: 'Press Start 2P', monospace;
-      text-align: center;
+      background-color: var(--obsidian);
+      color: var(--text-light);
       min-height: 100vh;
-      background-image: 
-        linear-gradient(rgba(57, 255, 20, 0.035) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(57, 255, 20, 0.035) 1px, transparent 1px);
-      background-size: 32px 32px;
-      overflow-x: hidden;
+      overflow: hidden;
+      image-rendering: pixelated;
+    }
+
+    .app {
       display: flex;
       flex-direction: column;
-      align-items: center;
-      padding: 30px 15px 40px;
+      height: 100vh;
+      max-width: 1200px;
+      margin: 0 auto;
     }
 
+    /* HEADER */
     header {
-      margin-bottom: 25px;
-      width: 100%;
-      max-width: 900px;
-    }
-
-    h1 {
-      font-size: 3.5rem;
-      line-height: 0.92;
-      color: var(--accent-lime);
-      text-shadow: 
-        0 0 20px var(--accent-pink),
-        0 0 8px var(--accent-lime),
-        5px 5px 0 #000,
-        -3px -3px 0 #000;
-      letter-spacing: 4px;
-      -webkit-text-stroke: 2.8px #000;
-    }
-
-    .viewer-container {
-      width: 100%;
-      max-width: 900px;
-      margin: 0 auto 35px;
-      padding: 22px;
-      background: var(--dark);
-      border: 10px solid #000;
-      box-shadow: 
-        0 0 0 8px var(--accent-pink),
-        0 0 0 16px var(--accent-lime),
-        0 0 0 22px #000,
-        0 0 65px var(--glow),
-        inset 0 0 50px rgba(0, 0, 0, 0.88);
-      border-radius: 4px;
-      position: relative;
-    }
-
-    #viewer {
-      width: 100%;
-      min-height: 520px;
-      background: #000;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          var(--grass-green) 0px,
+          var(--grass-green) 16px,
+          var(--grass-light) 16px,
+          var(--grass-light) 32px
+        );
+      border-bottom: var(--border-pixel) solid var(--dirt-dark);
+      padding: 16px 20px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      border: 8px solid #111;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
       position: relative;
+      z-index: 100;
+      animation: grassSway 4s ease-in-out infinite;
     }
 
-    #viewer img, 
-    #viewer video {
-      max-width: 100%;
-      max-height: 520px;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-      transition: opacity 0.5s ease;
-    }
-
-    .viewer-container.loading #viewer::after {
-      content: 'SUMMONING CAT...';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: var(--accent-lime);
-      font-size: 1.05rem;
-      letter-spacing: 4px;
-      text-shadow: 0 0 15px var(--accent-lime);
-      z-index: 15;
-      animation: pulse 1.4s infinite;
-    }
-
-    .viewer-container.loading #viewer::before {
+    header::after {
       content: '';
       position: absolute;
-      width: 52px;
-      height: 52px;
-      border: 6px solid var(--accent-pink);
-      border-top-color: var(--accent-lime);
-      border-radius: 50%;
-      animation: spin 0.85s linear infinite;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 16;
+      bottom: -12px;
+      left: 0;
+      right: 0;
+      height: 8px;
+      background:
+        repeating-linear-gradient(
+          90deg,
+          var(--dirt-brown) 0px,
+          var(--dirt-brown) 16px,
+          var(--dirt-dark) 16px,
+          var(--dirt-dark) 32px
+        );
+      border-bottom: var(--border-pixel) solid var(--stone-dark);
     }
 
-    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
-    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
-
-    .type-label {
-      position: absolute;
-      top: 22px;
-      right: 22px;
-      background: rgba(0,0,0,0.92);
-      color: var(--accent-lime);
-      padding: 7px 20px;
-      font-size: 0.75rem;
-      border: 4px solid var(--accent-lime);
-      text-transform: uppercase;
-      letter-spacing: 3px;
-      box-shadow: 0 0 12px #000;
-      z-index: 20;
-      transition: all 0.3s ease;
-    }
-
-    .status {
-      margin: 18px 0 12px;
-      color: #888;
-      font-size: 0.9rem;
-      letter-spacing: 1.5px;
-      min-height: 24px;
-    }
-
-    .controls {
-      max-width: 900px;
-      margin: 0 auto;
+    .logo {
       display: flex;
-      gap: 28px;
-      justify-content: center;
-      flex-wrap: wrap;
       align-items: center;
+      gap: 12px;
     }
 
-    button {
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--dirt-dark);
+      border: 3px solid var(--dirt-brown);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      image-rendering: pixelated;
+    }
+
+    .logo h1 {
+      font-size: 14px;
+      color: #fff;
+      text-shadow:
+        3px 3px 0 var(--dirt-dark),
+        -1px -1px 0 rgba(0,0,0,0.3);
+      letter-spacing: 2px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    /* PIXEL BUTTON */
+    .mc-btn {
       font-family: 'Press Start 2P', monospace;
-      font-size: 1.22rem;
-      padding: 19px 38px;
-      border: 7px solid #fff;
-      background: #000;
+      font-size: 9px;
+      padding: 8px 14px;
+      border: none;
+      cursor: pointer;
+      position: relative;
+      color: #fff;
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.4);
+      transition: transform 0.05s, filter 0.05s;
+      image-rendering: pixelated;
+      outline: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mc-btn::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border: 3px solid;
+      pointer-events: none;
+    }
+
+    .mc-btn:active {
+      transform: scale(0.95);
+      filter: brightness(0.85);
+    }
+
+    .mc-btn:hover {
+      filter: brightness(1.15);
+    }
+
+    .mc-btn.stone {
+      background: linear-gradient(180deg, #8B8B8B 0%, #6B6B6B 50%, #5B5B5B 100%);
+    }
+    .mc-btn.stone::before {
+      border-color: #ABABAB #4B4B4B #4B4B4B #ABABAB;
+    }
+
+    .mc-btn.emerald {
+      background: linear-gradient(180deg, #17DD62 0%, #10B84E 50%, #0D9940 100%);
+    }
+    .mc-btn.emerald::before {
+      border-color: #5BFFAA #087830 #087830 #5BFFAA;
+    }
+
+    .mc-btn.redstone {
+      background: linear-gradient(180deg, #FF4444 0%, #CC2222 50%, #AA1111 100%);
+    }
+    .mc-btn.redstone::before {
+      border-color: #FF8888 #881111 #881111 #FF8888;
+    }
+
+    .mc-btn.diamond {
+      background: linear-gradient(180deg, #4AEDD9 0%, #2EC4B6 50%, #20A89C 100%);
+    }
+    .mc-btn.diamond::before {
+      border-color: #8AFFF2 #168079 #168079 #8AFFF2;
+    }
+
+    .mc-btn.gold {
+      background: linear-gradient(180deg, #FCDB05 0%, #D4B800 50%, #B09800 100%);
+      color: #3D2E00;
+      text-shadow: 1px 1px 0 rgba(255,255,255,0.3);
+    }
+    .mc-btn.gold::before {
+      border-color: #FFF066 #8A7200 #8A7200 #FFF066;
+    }
+
+    .mc-btn[disabled] {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    #selectionCount {
+      font-size: 9px;
+      color: var(--gold);
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+      min-width: 80px;
+      text-align: center;
+    }
+
+    #downloadBtn {
+      display: none;
+    }
+
+    /* GALLERY */
+    .gallery-wrapper {
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+      margin-top: 12px;
+      background:
+        repeating-linear-gradient(
+          0deg,
+          transparent 0px,
+          transparent 62px,
+          rgba(255,255,255,0.02) 62px,
+          rgba(255,255,255,0.02) 64px
+        ),
+        repeating-linear-gradient(
+          90deg,
+          transparent 0px,
+          transparent 62px,
+          rgba(255,255,255,0.02) 62px,
+          rgba(255,255,255,0.02) 64px
+        );
+    }
+
+    #gallery {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      padding: 10px;
+      overflow-y: auto;
+      height: 100%;
+      scrollbar-width: thin;
+      scrollbar-color: var(--stone-gray) var(--obsidian);
+    }
+
+    #gallery::-webkit-scrollbar {
+      width: 10px;
+    }
+    #gallery::-webkit-scrollbar-track {
+      background: var(--obsidian);
+      border-left: 2px solid var(--stone-dark);
+    }
+    #gallery::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #8B8B8B, #5B5B5B);
+      border: 2px solid;
+      border-color: #ABABAB #4B4B4B #4B4B4B #ABABAB;
+    }
+
+    /* CAT CARD */
+    .cat-card {
+      position: relative;
+      aspect-ratio: 1;
+      overflow: hidden;
+      cursor: pointer;
+      background: var(--stone-dark);
+      border: 3px solid;
+      border-color: #6B6B6B #3B3B3B #3B3B3B #6B6B6B;
+      transition: transform 0.1s, border-color 0.15s;
+    }
+
+    .cat-card:hover {
+      transform: scale(1.03);
+      z-index: 2;
+      border-color: var(--diamond) var(--diamond) var(--diamond) var(--diamond);
+    }
+
+    .cat-card img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      image-rendering: auto;
+      transition: filter 0.2s;
+    }
+
+    .cat-card:hover img {
+      filter: brightness(1.1);
+    }
+
+    .card-overlay {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 50%, rgba(0,0,0,0.6) 100%);
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      padding: 6px;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .cat-card:hover .card-overlay {
+      opacity: 1;
+    }
+
+    .card-checkbox {
+      width: 24px;
+      height: 24px;
+      background: rgba(0,0,0,0.6);
+      border: 3px solid;
+      border-color: #AAA #555 #555 #AAA;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      color: transparent;
+      transition: all 0.1s;
+    }
+
+    .select-mode .card-overlay {
+      opacity: 1;
+    }
+
+    .cat-card.selected {
+      border-color: var(--emerald) !important;
+      box-shadow: 0 0 12px rgba(23, 221, 98, 0.4);
+    }
+
+    .cat-card.selected .card-checkbox {
+      background: var(--emerald);
+      border-color: #5BFFAA #087830 #087830 #5BFFAA;
+      color: #fff;
+    }
+
+    .tweet-btn {
+      width: 28px;
+      height: 28px;
+      background: rgba(0,0,0,0.6);
+      border: 2px solid;
+      border-color: #AAA #555 #555 #AAA;
       color: #fff;
       cursor: pointer;
-      transition: all 0.2s cubic-bezier(0.25, 0.9, 0.3, 1);
-      box-shadow: 7px 7px 0 #fff;
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      min-width: 160px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      transition: background 0.1s;
     }
 
-    button:hover:not(:disabled) {
-      transform: translate(-4px, -6px);
-      box-shadow: 13px 13px 0 var(--accent-pink);
-      background: var(--accent-pink);
-      color: #000;
-      border-color: var(--accent-pink);
+    .tweet-btn:hover {
+      background: #1DA1F2;
+      border-color: #5BC0FF #0D6EAD #0D6EAD #5BC0FF;
     }
 
-    button:active:not(:disabled) {
-      transform: translate(3px, 3px);
-      box-shadow: 4px 4px 0 #000;
+    /* LOADER */
+    #loader {
+      display: none;
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bedrock);
+      border: 3px solid;
+      border-color: #6B6B6B #3B3B3B #3B3B3B #6B6B6B;
+      padding: 12px 24px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      color: var(--gold);
+      text-shadow: 2px 2px 0 rgba(0,0,0,0.5);
+      z-index: 200;
+      animation: loaderPulse 1s ease-in-out infinite;
     }
 
-    button:disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      transform: none !important;
-      box-shadow: 7px 7px 0 #fff !important;
+    @keyframes loaderPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
     }
 
-    #nextBtn {
-      font-size: 1.38rem;
-      padding: 26px 52px;
-      background: linear-gradient(45deg, var(--accent-lime), #00ff88);
-      color: #000;
-      border-color: #000;
-      box-shadow: 8px 8px 0 #000;
-      min-width: 340px;
-      line-height: 1.25;
+    /* HOTBAR */
+    .hotbar {
+      background: var(--bedrock);
+      border-top: 4px solid var(--stone-dark);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      flex-wrap: wrap;
     }
 
-    #nextBtn:hover:not(:disabled) {
-      background: linear-gradient(45deg, #fff, var(--accent-lime));
-      box-shadow: 14px 14px 0 #000;
+    .hotbar-slot {
+      width: 48px;
+      height: 48px;
+      background: rgba(255,255,255,0.05);
+      border: 3px solid;
+      border-color: #555 #2a2a2a #2a2a2a #555;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      transition: border-color 0.1s, background 0.1s;
+      position: relative;
     }
 
+    .hotbar-slot:hover {
+      border-color: #999 #444 #444 #999;
+      background: rgba(255,255,255,0.1);
+    }
+
+    .hotbar-slot.active {
+      border-color: #fff #888 #888 #fff;
+      background: rgba(255,255,255,0.15);
+    }
+
+    .hotbar-slot .tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--bedrock);
+      border: 2px solid var(--stone-gray);
+      padding: 6px 10px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: var(--text-light);
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+
+    .hotbar-slot:hover .tooltip {
+      opacity: 1;
+    }
+
+    .cache-indicator {
+      position: fixed;
+      top: 12px;
+      right: 12px;
+      background: var(--bedrock);
+      border: 2px solid var(--stone-dark);
+      padding: 6px 10px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 7px;
+      color: var(--text-dim);
+      z-index: 300;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .cache-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--emerald);
+      border: 1px solid rgba(0,0,0,0.3);
+    }
+
+    .cache-dot.miss {
+      background: var(--redstone);
+    }
+
+    /* RESPONSIVE */
     @media (max-width: 768px) {
-      h1 { font-size: 2.6rem; letter-spacing: 3px; }
-      #viewer { min-height: 390px; }
-      button { padding: 17px 26px; font-size: 1.08rem; min-width: 130px; }
-      #nextBtn { padding: 23px 38px; font-size: 1.28rem; min-width: 260px; }
-      .controls { gap: 20px; }
+      #gallery {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        padding: 6px;
+      }
+
+      header {
+        padding: 10px 12px;
+      }
+
+      .logo h1 {
+        font-size: 10px;
+      }
+
+      .mc-btn {
+        font-size: 7px;
+        padding: 6px 10px;
+      }
+
+      .hotbar-slot {
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      #gallery {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .logo-icon {
+        width: 32px;
+        height: 32px;
+        font-size: 16px;
+      }
+
+      .logo h1 {
+        font-size: 8px;
+      }
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>CAT<br>OH MY GOD</h1>
-  </header>
+  <div class="app">
+    <header>
+      <div class="logo">
+        <div class="logo-icon">&#128049;</div>
+        <h1>MINECRAFT CATS</h1>
+      </div>
+      <div class="header-actions">
+        <span id="selectionCount"></span>
+        <button id="selectBtn" class="mc-btn diamond">Select</button>
+        <button id="downloadBtn" class="mc-btn emerald">Download ZIP</button>
+        <button id="refreshBtn" class="mc-btn stone">Refresh</button>
+      </div>
+    </header>
 
-  <div class="viewer-container" id="viewerContainer">
-    <div id="viewer"></div>
-    <div class="type-label" id="typeLabel">CAT MEDIA</div>
+    <div class="gallery-wrapper">
+      <div id="gallery"></div>
+    </div>
+
+    <div class="hotbar">
+      <div class="hotbar-slot" id="hotbar-select" title="Select mode">
+        <span>&#9745;</span>
+        <div class="tooltip">Select</div>
+      </div>
+      <div class="hotbar-slot" id="hotbar-download" title="Download selected">
+        <span>&#128230;</span>
+        <div class="tooltip">Download</div>
+      </div>
+      <div class="hotbar-slot" id="hotbar-refresh" title="Load more cats">
+        <span>&#128260;</span>
+        <div class="tooltip">More Cats</div>
+      </div>
+      <div class="hotbar-slot" id="hotbar-top" title="Scroll to top">
+        <span>&#11014;</span>
+        <div class="tooltip">Top</div>
+      </div>
+      <div class="hotbar-slot" id="hotbar-cache" title="Clear cache">
+        <span>&#128465;</span>
+        <div class="tooltip">Clear Cache</div>
+      </div>
+    </div>
   </div>
 
-  <div class="status" id="status">LOADING LEGENDARY CATS...</div>
+  <div id="loader">Loading cats...</div>
 
-  <div class="controls">
-    <button id="prevBtn">← BACK</button>
-    <button id="nextBtn">OH MY GOD ANOTHER ONE!</button>
-    <button id="downloadBtn">↓ DOWNLOAD</button>
+  <div class="cache-indicator" id="cacheStatus">
+    <div class="cache-dot" id="cacheDot"></div>
+    <span id="cacheText">Cache: --</span>
   </div>
 
   <script>
-    const CONFIG = {
-      owner: 'tooter9',
-      repo: 'Youvideo',
-      branch: 'main',
-      path: 'cats/',
-      extensions: /\.(jpe?g|png|gif|webp|mp4|webm|mov)$/i
-    };
+    var CACHE_KEY = 'minecraft_cats_cache';
+    var CACHE_DURATION = 30 * 60 * 1000;
+    var BATCH_SIZE = 25;
+    var API_URL = 'https://api.thecatapi.com/v1/images/search';
 
-    let allFiles = [];
-    let currentFile = null;
-    let historyStack = [];
-    let isLoading = false;
-
-    const viewerContainer = document.getElementById('viewerContainer');
-    const viewer = document.getElementById('viewer');
-    const statusEl = document.getElementById('status');
-    const typeLabel = document.getElementById('typeLabel');
-    const prevBtn = document.getElementById('prevBtn');
-    const nextBtn = document.getElementById('nextBtn');
-    const downloadBtn = document.getElementById('downloadBtn');
+    var container = document.getElementById('gallery');
+    var selectedIds = new Set();
+    var allImages = [];
+    var isSelectMode = false;
+    var isLoading = false;
+    var scrollSpeed = 0.5;
+    var animationId = null;
 
     function getCache() {
       try {
-        const cached = localStorage.getItem('catohmygodFiles');
-        const time = localStorage.getItem('catohmygodTime');
-        if (cached && time && Date.now() - parseInt(time) < 7 * 24 * 60 * 60 * 1000) {
-          return JSON.parse(cached);
+        var raw = localStorage.getItem(CACHE_KEY);
+        if (!raw) return null;
+        var entry = JSON.parse(raw);
+        if (Date.now() - entry.timestamp > CACHE_DURATION) {
+          localStorage.removeItem(CACHE_KEY);
+          return null;
         }
-      } catch (e) {}
-      return null;
+        return entry;
+      } catch (e) {
+        return null;
+      }
     }
 
-    function saveCache(files) {
+    function setCache(images) {
+      var entry = { images: images, timestamp: Date.now() };
       try {
-        localStorage.setItem('catohmygodFiles', JSON.stringify(files));
-        localStorage.setItem('catohmygodTime', Date.now());
-      } catch (e) {}
+        localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
+      } catch (e) {
+        console.warn('Cache storage failed');
+      }
     }
 
-    function getFileType(path) {
-      const ext = path.split('.').pop().toLowerCase();
-      return ['mp4', 'webm', 'mov'].includes(ext) ? 'VIDEO' : 'PHOTO';
-    }
-
-    function setLoading(state) {
-      isLoading = state;
-      viewerContainer.classList.toggle('loading', state);
-      nextBtn.disabled = state;
-      prevBtn.disabled = state || historyStack.length <= 1;
-    }
-
-    function createMedia(url, path) {
-      viewer.innerHTML = '';
-      const type = getFileType(path);
-
-      if (type === 'VIDEO') {
-        const video = document.createElement('video');
-        video.src = url;
-        video.controls = true;
-        video.autoplay = true;
-        video.loop = true;
-        video.muted = true;
-        video.playsInline = true;
-        viewer.appendChild(video);
-
-        typeLabel.textContent = 'VIDEO';
-        typeLabel.style.borderColor = '#00ffff';
-        typeLabel.style.color = '#00ffff';
-        return video;
+    function updateCacheIndicator(fromCache) {
+      var dot = document.getElementById('cacheDot');
+      var text = document.getElementById('cacheText');
+      if (fromCache) {
+        dot.className = 'cache-dot';
+        text.textContent = 'Cache: HIT';
       } else {
-        const img = document.createElement('img');
-        img.src = url;
-        img.alt = 'legendary cat';
-        viewer.appendChild(img);
-
-        typeLabel.textContent = 'PHOTO';
-        typeLabel.style.borderColor = '#39ff14';
-        typeLabel.style.color = '#39ff14';
-        return img;
+        dot.className = 'cache-dot miss';
+        text.textContent = 'Cache: API';
       }
     }
 
-    async function showMedia(path, addToHistory = true) {
-      if (!path || isLoading || path === currentFile) return;
-
-      setLoading(true);
-      statusEl.textContent = 'SUMMONING NEXT LEGEND...';
-
-      currentFile = path;
-      if (addToHistory) {
-        historyStack.push(path);
-        if (historyStack.length > 25) historyStack.shift();
+    async function fetchCats(count) {
+      count = count || BATCH_SIZE;
+      var cached = getCache();
+      if (cached && cached.images.length >= count) {
+        updateCacheIndicator(true);
+        return cached.images.slice(0, count);
       }
 
-      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
-      const media = createMedia(url, path);
-
       try {
-        if (media.tagName === 'IMG') {
-          await new Promise((res, rej) => {
-            media.onload = res;
-            media.onerror = rej;
-          });
-        } else {
-          await new Promise((res, rej) => {
-            media.onloadedmetadata = res;
-            media.onerror = rej;
-            setTimeout(() => rej(new Error('timeout')), 12000);
-          });
+        var res = await fetch(API_URL + '?limit=' + count + '&size=small');
+        if (!res.ok) throw new Error('API error: ' + res.status);
+        var data = await res.json();
+
+        var merged = cached ? cached.images.slice() : [];
+        var existingIds = new Set(merged.map(function(i) { return i.id; }));
+        for (var img of data) {
+          if (!existingIds.has(img.id)) {
+            merged.push(img);
+            existingIds.add(img.id);
+          }
         }
-      } catch (e) {
-        console.warn('Media load issue:', e);
+        setCache(merged);
+        updateCacheIndicator(false);
+        return data;
+      } catch (err) {
+        console.error('Fetch failed:', err);
+        updateCacheIndicator(true);
+        return cached ? cached.images : [];
       }
-
-      media.style.opacity = '0';
-      setTimeout(() => { media.style.opacity = '1'; }, 50);
-
-      setTimeout(() => {
-        statusEl.textContent = '';
-        setLoading(false);
-      }, 650);
     }
 
-    function getRandomMedia() {
-      if (!allFiles.length) return null;
-      let idx;
-      do {
-        idx = Math.floor(Math.random() * allFiles.length);
-      } while (allFiles[idx] === currentFile && allFiles.length > 1);
-      return allFiles[idx];
+    async function loadImages() {
+      if (isLoading) return;
+      isLoading = true;
+      showLoading(true);
+
+      var images = await fetchCats(BATCH_SIZE);
+      allImages = allImages.concat(images);
+      renderImages(images);
+
+      showLoading(false);
+      isLoading = false;
     }
 
-    async function fetchFiles() {
-      statusEl.textContent = 'LOADING LEGENDARY CATS...';
-      setLoading(true);
-
-      const cached = getCache();
-      if (cached && cached.length) {
-        allFiles = cached;
-        setLoading(false);
-        const first = allFiles[Math.floor(Math.random() * allFiles.length)];
-        historyStack = [];
-        showMedia(first, true);
-        return;
+    function renderImages(images) {
+      for (var img of images) {
+        var card = createCard(img);
+        container.appendChild(card);
       }
+    }
+
+    function createCard(cat) {
+      var card = document.createElement('div');
+      card.className = 'cat-card';
+      card.dataset.id = cat.id;
+
+      var img = document.createElement('img');
+      img.src = cat.url;
+      img.alt = 'Cat';
+      img.loading = 'lazy';
+      img.draggable = false;
+
+      var overlay = document.createElement('div');
+      overlay.className = 'card-overlay';
+
+      var checkbox = document.createElement('div');
+      checkbox.className = 'card-checkbox';
+      checkbox.innerHTML = '&#10003;';
+
+      var tweetBtn = document.createElement('button');
+      tweetBtn.className = 'tweet-btn';
+      tweetBtn.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>';
+      tweetBtn.title = 'Tweet this cat';
+      tweetBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        tweetCat(cat);
+      });
+
+      overlay.appendChild(checkbox);
+      overlay.appendChild(tweetBtn);
+      card.appendChild(img);
+      card.appendChild(overlay);
+
+      var pressTimer = null;
+
+      card.addEventListener('pointerdown', function() {
+        pressTimer = setTimeout(function() {
+          if (!isSelectMode) toggleSelectMode();
+          toggleSelect(card, cat.id);
+        }, 500);
+      });
+
+      card.addEventListener('pointerup', function() {
+        if (pressTimer) clearTimeout(pressTimer);
+      });
+
+      card.addEventListener('pointerleave', function() {
+        if (pressTimer) clearTimeout(pressTimer);
+      });
+
+      card.addEventListener('click', function() {
+        if (isSelectMode) {
+          toggleSelect(card, cat.id);
+        }
+      });
+
+      return card;
+    }
+
+    function toggleSelect(card, id) {
+      if (selectedIds.has(id)) {
+        selectedIds.delete(id);
+        card.classList.remove('selected');
+      } else {
+        selectedIds.add(id);
+        card.classList.add('selected');
+      }
+      updateSelectionUI();
+    }
+
+    function toggleSelectMode() {
+      isSelectMode = !isSelectMode;
+      document.body.classList.toggle('select-mode', isSelectMode);
+      var btn = document.getElementById('selectBtn');
+      btn.textContent = isSelectMode ? 'Cancel' : 'Select';
+
+      if (!isSelectMode) {
+        clearSelection();
+      }
+      updateSelectionUI();
+    }
+
+    function clearSelection() {
+      selectedIds.clear();
+      document.querySelectorAll('.cat-card.selected').forEach(function(el) {
+        el.classList.remove('selected');
+      });
+    }
+
+    function updateSelectionUI() {
+      var counter = document.getElementById('selectionCount');
+      var downloadBtn = document.getElementById('downloadBtn');
+      var count = selectedIds.size;
+      counter.textContent = count > 0 ? count + ' selected' : '';
+      downloadBtn.style.display = count > 0 ? 'flex' : 'none';
+    }
+
+    async function downloadSelected() {
+      if (selectedIds.size === 0) return;
+
+      var downloadBtn = document.getElementById('downloadBtn');
+      downloadBtn.textContent = 'Packing...';
+      downloadBtn.disabled = true;
 
       try {
-        const refRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/ref/heads/${CONFIG.branch}`);
-        const ref = await refRes.json();
-        const sha = ref.object.sha;
+        var zip = new JSZip();
+        var selectedImages = allImages.filter(function(img) { return selectedIds.has(img.id); });
 
-        const treeRes = await fetch(`https://api.github.com/repos/${CONFIG.owner}/${CONFIG.repo}/git/trees/${sha}?recursive=1`);
-        const data = await treeRes.json();
+        await Promise.all(selectedImages.map(async function(img, i) {
+          try {
+            var res = await fetch(img.url);
+            var blob = await res.blob();
+            var ext = img.url.split('.').pop().split('?')[0] || 'jpg';
+            zip.file('cat_' + (i + 1) + '.' + ext, blob);
+          } catch (e) {
+            console.warn('Failed to fetch: ' + img.url);
+          }
+        }));
 
-        allFiles = data.tree
-          .filter(item => 
-            item.type === 'blob' && 
-            CONFIG.extensions.test(item.path) && 
-            item.path.startsWith(CONFIG.path)
-          )
-          .map(item => item.path);
-
-        saveCache(allFiles);
-      } catch (e) {
-        console.error(e);
-        allFiles = getCache() || [];
-        statusEl.textContent = allFiles.length ? 'USING CACHE' : 'NETWORK ERROR';
+        var content = await zip.generateAsync({ type: 'blob' });
+        var url = URL.createObjectURL(content);
+        var a = document.createElement('a');
+        a.href = url;
+        a.download = 'minecraft_cats.zip';
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error('ZIP creation failed:', err);
+        alert('Failed to create ZIP. Please try again.');
       }
 
-      setLoading(false);
-      if (allFiles.length && !currentFile) {
-        const first = allFiles[Math.floor(Math.random() * allFiles.length)];
-        historyStack = [];
-        showMedia(first, true);
-      }
+      downloadBtn.textContent = 'Download ZIP';
+      downloadBtn.disabled = false;
     }
 
-    nextBtn.addEventListener('click', () => {
-      if (isLoading || !allFiles.length) return;
-      const randomOne = getRandomMedia();
-      if (randomOne) showMedia(randomOne, true);
-    });
+    function tweetCat(cat) {
+      var text = encodeURIComponent('Check out this cute cat! #MinecraftCats #CatsOfTwitter');
+      var url = encodeURIComponent(cat.url);
+      window.open('https://twitter.com/intent/tweet?text=' + text + '&url=' + url, '_blank');
+    }
 
-    prevBtn.addEventListener('click', () => {
-      if (isLoading || historyStack.length < 2) return;
-      historyStack.pop();
-      const prevPath = historyStack[historyStack.length - 1];
-      if (prevPath) showMedia(prevPath, false);
-    });
+    function startAutoScroll() {
+      function scroll() {
+        container.scrollTop += scrollSpeed;
 
-    downloadBtn.addEventListener('click', () => {
-      if (!currentFile) return;
-      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${currentFile}`;
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = currentFile.split('/').pop();
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-    });
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 300) {
+          loadImages();
+        }
 
-    document.addEventListener('keydown', e => {
-      if (isLoading) return;
-      if (e.key === ' ' || e.key === 'Enter') {
-        e.preventDefault();
-        nextBtn.click();
+        animationId = requestAnimationFrame(scroll);
       }
-      if (e.key === 'ArrowLeft') prevBtn.click();
-    });
+      animationId = requestAnimationFrame(scroll);
 
-    window.onload = () => {
-      fetchFiles();
-    };
+      container.addEventListener('mouseenter', function() {
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      });
+
+      container.addEventListener('mouseleave', function() {
+        if (!animationId) {
+          animationId = requestAnimationFrame(scroll);
+        }
+      });
+
+      container.addEventListener('touchstart', function() {
+        if (animationId) {
+          cancelAnimationFrame(animationId);
+          animationId = null;
+        }
+      }, { passive: true });
+
+      container.addEventListener('touchend', function() {
+        setTimeout(function() {
+          if (!animationId) {
+            animationId = requestAnimationFrame(scroll);
+          }
+        }, 3000);
+      });
+    }
+
+    function showLoading(show) {
+      var loader = document.getElementById('loader');
+      loader.style.display = show ? 'flex' : 'none';
+    }
+
+    function setupEventListeners() {
+      document.getElementById('selectBtn').addEventListener('click', function() {
+        toggleSelectMode();
+      });
+
+      document.getElementById('downloadBtn').addEventListener('click', function() {
+        downloadSelected();
+      });
+
+      document.getElementById('refreshBtn').addEventListener('click', async function() {
+        localStorage.removeItem(CACHE_KEY);
+        container.innerHTML = '';
+        allImages = [];
+        await loadImages();
+      });
+
+      document.getElementById('hotbar-select').addEventListener('click', function() {
+        toggleSelectMode();
+      });
+
+      document.getElementById('hotbar-download').addEventListener('click', function() {
+        downloadSelected();
+      });
+
+      document.getElementById('hotbar-refresh').addEventListener('click', async function() {
+        await loadImages();
+      });
+
+      document.getElementById('hotbar-top').addEventListener('click', function() {
+        container.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      document.getElementById('hotbar-cache').addEventListener('click', function() {
+        localStorage.removeItem(CACHE_KEY);
+        updateCacheIndicator(false);
+        var text = document.getElementById('cacheText');
+        text.textContent = 'Cache: CLEARED';
+        setTimeout(function() { text.textContent = 'Cache: --'; }, 2000);
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', async function() {
+      setupEventListeners();
+      await loadImages();
+      startAutoScroll();
+    });
   </script>
 </body>
 </html>
