@@ -5,6 +5,8 @@ on:
     paths:
       - 'cats/**'
       - 'cats[0-9]*/**'
+      - 'build.js'
+      - 'index.html'
 
   workflow_dispatch:
 
