@@ -11,15 +11,12 @@
       --bg: #0b0814;
       --accent-pink: #ff00ff;
       --accent-lime: #39ff14;
+      --accent-cyan: #00ffff;
       --dark: #1a1433;
       --glow: rgba(255, 0, 255, 0.35);
     }
 
-    * { 
-      margin: 0; 
-      padding: 0; 
-      box-sizing: border-box; 
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
     body {
       background: var(--bg);
@@ -80,6 +77,7 @@
       justify-content: center;
       overflow: hidden;
       border: 7px solid #111;
+      position: relative;
     }
 
     #viewer img, 
@@ -89,8 +87,41 @@
       width: auto;
       height: auto;
       object-fit: contain;
-      transition: opacity 0.4s ease;
+      transition: opacity 0.5s ease;
     }
+
+    /* Loading state */
+    .viewer-container.loading #viewer::after {
+      content: 'SUMMONING CAT...';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: var(--accent-lime);
+      font-size: 1.05rem;
+      letter-spacing: 4px;
+      text-shadow: 0 0 15px var(--accent-lime);
+      z-index: 15;
+      animation: pulse 1.4s infinite;
+    }
+
+    .viewer-container.loading #viewer::before {
+      content: '';
+      position: absolute;
+      width: 52px;
+      height: 52px;
+      border: 6px solid var(--accent-pink);
+      border-top-color: var(--accent-lime);
+      border-radius: 50%;
+      animation: spin 0.85s linear infinite;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 16;
+    }
+
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
     .type-label {
       position: absolute;
@@ -104,7 +135,8 @@
       text-transform: uppercase;
       letter-spacing: 3px;
       box-shadow: 0 0 12px #000;
-      z-index: 10;
+      z-index: 20;
+      transition: all 0.3s ease;
     }
 
     .status {
@@ -138,7 +170,7 @@
       letter-spacing: 2px;
     }
 
-    button:hover {
+    button:hover:not(:disabled) {
       transform: translate(-4px, -6px);
       box-shadow: 13px 13px 0 var(--accent-pink);
       background: var(--accent-pink);
@@ -146,9 +178,16 @@
       border-color: var(--accent-pink);
     }
 
-    button:active {
+    button:active:not(:disabled) {
       transform: translate(3px, 3px);
       box-shadow: 4px 4px 0 #000;
+    }
+
+    button:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      transform: none !important;
+      box-shadow: 7px 7px 0 #fff !important;
     }
 
     #nextBtn {
@@ -160,7 +199,7 @@
       box-shadow: 8px 8px 0 #000;
     }
 
-    #nextBtn:hover {
+    #nextBtn:hover:not(:disabled) {
       background: linear-gradient(45deg, #fff, var(--accent-lime));
       box-shadow: 14px 14px 0 #000;
     }
@@ -169,6 +208,7 @@
       h1 { font-size: 2.85rem; letter-spacing: 4px; }
       #viewer { min-height: 390px; }
       button { padding: 16px 28px; font-size: 1.05rem; }
+      #nextBtn { padding: 22px 52px; font-size: 1.35rem; }
     }
   </style>
 </head>
@@ -177,7 +217,7 @@
     <h1>CAT<br>OH MY GOD</h1>
   </header>
 
-  <div class="viewer-container">
+  <div class="viewer-container" id="viewerContainer">
     <div id="viewer"></div>
     <div class="type-label" id="typeLabel">CAT MEDIA</div>
   </div>
@@ -204,6 +244,7 @@
     let historyStack = [];
     let isLoading = false;
 
+    const viewerContainer = document.getElementById('viewerContainer');
     const viewer = document.getElementById('viewer');
     const statusEl = document.getElementById('status');
     const typeLabel = document.getElementById('typeLabel');
@@ -234,6 +275,12 @@
       return ['mp4', 'webm', 'mov'].includes(ext) ? 'VIDEO' : 'PHOTO';
     }
 
+    function setLoading(state) {
+      isLoading = state;
+      viewerContainer.classList.toggle('loading', state);
+      nextBtn.disabled = state;
+    }
+
     function createMedia(url, path) {
       viewer.innerHTML = '';
       const type = getFileType(path);
@@ -245,34 +292,68 @@
         video.autoplay = true;
         video.loop = true;
         video.muted = true;
+        video.playsInline = true;
         viewer.appendChild(video);
+
         typeLabel.textContent = 'VIDEO';
         typeLabel.style.borderColor = '#00ffff';
         typeLabel.style.color = '#00ffff';
+        return video;
       } else {
         const img = document.createElement('img');
         img.src = url;
-        img.alt = 'cat';
+        img.alt = 'legendary cat';
         viewer.appendChild(img);
+
         typeLabel.textContent = 'PHOTO';
         typeLabel.style.borderColor = '#39ff14';
         typeLabel.style.color = '#39ff14';
+        return img;
       }
     }
 
-    function showMedia(path) {
-      if (!path) return;
+    async function showMedia(path) {
+      if (!path || isLoading) return;
+
+      setLoading(true);
+      statusEl.textContent = 'SUMMONING NEXT LEGEND...';
+
       currentFile = path;
       const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
-      
-      createMedia(url, path);
+
+      const media = createMedia(url, path);
+
+      try {
+        if (media.tagName === 'IMG') {
+          await new Promise((res, rej) => {
+            media.onload = res;
+            media.onerror = rej;
+          });
+        } else {
+          await new Promise((res, rej) => {
+            media.onloadedmetadata = res;
+            media.onerror = rej;
+            setTimeout(() => rej(), 12000);
+          });
+        }
+      } catch (e) {
+        console.warn('Media load issue');
+      }
 
       if (!historyStack.includes(path)) {
         historyStack.push(path);
-        if (historyStack.length > 20) historyStack.shift();
+        if (historyStack.length > 25) historyStack.shift();
       }
 
       prevBtn.disabled = historyStack.length <= 1;
+
+      media.style.opacity = '0';
+      setTimeout(() => { media.style.opacity = '1'; }, 30);
+
+      setTimeout(() => {
+        statusEl.textContent = `${allFiles.length} LEGENDARY CATS READY`;
+        setLoading(false);
+      }, 800);
     }
 
     function getRandomMedia() {
@@ -286,13 +367,12 @@
 
     async function fetchFiles() {
       statusEl.textContent = 'LOADING LEGENDARY CATS...';
-      isLoading = true;
+      setLoading(true);
 
       const cached = getCache();
       if (cached && cached.length) {
         allFiles = cached;
-        statusEl.textContent = 'READY.';
-        isLoading = false;
+        setLoading(false);
         showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
         return;
       }
@@ -315,16 +395,13 @@
 
         allFiles.sort(() => Math.random() - 0.5);
         saveCache(allFiles);
-
-        statusEl.textContent = 'READY.';
       } catch (e) {
         console.error(e);
-        statusEl.textContent = 'ERROR. USING CACHE...';
         allFiles = getCache() || [];
-        if (allFiles.length) statusEl.textContent = 'READY.';
+        statusEl.textContent = allFiles.length ? 'CACHE USED' : 'ERROR';
       }
 
-      isLoading = false;
+      setLoading(false);
       if (allFiles.length && !currentFile) {
         showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
       }
@@ -337,7 +414,7 @@
     });
 
     prevBtn.addEventListener('click', () => {
-      if (historyStack.length < 2 || isLoading) return;
+      if (isLoading || historyStack.length < 2) return;
       historyStack.pop();
       const prev = historyStack[historyStack.length - 1];
       if (prev) showMedia(prev);
@@ -355,6 +432,7 @@
     });
 
     document.addEventListener('keydown', e => {
+      if (isLoading) return;
       if (e.key === ' ' || e.key === 'Enter') {
         e.preventDefault();
         nextBtn.click();
