@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>catohmygod</title>
+  <title>CAT OH MY GOD</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
 
@@ -93,7 +93,6 @@
       transition: opacity 0.5s ease;
     }
 
-    /* Loading state */
     .viewer-container.loading #viewer::after {
       content: 'SUMMONING CAT...';
       position: absolute;
@@ -287,6 +286,7 @@
       isLoading = state;
       viewerContainer.classList.toggle('loading', state);
       nextBtn.disabled = state;
+      prevBtn.disabled = state || historyStack.length <= 1;
     }
 
     function createMedia(url, path) {
@@ -320,15 +320,19 @@
       }
     }
 
-    async function showMedia(path) {
-      if (!path || isLoading) return;
+    async function showMedia(path, addToHistory = true) {
+      if (!path || isLoading || path === currentFile) return;
 
       setLoading(true);
       statusEl.textContent = 'SUMMONING NEXT LEGEND...';
 
       currentFile = path;
-      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
+      if (addToHistory) {
+        historyStack.push(path);
+        if (historyStack.length > 25) historyStack.shift();
+      }
 
+      const url = `https://raw.githubusercontent.com/${CONFIG.owner}/${CONFIG.repo}/${CONFIG.branch}/${path}`;
       const media = createMedia(url, path);
 
       try {
@@ -341,27 +345,20 @@
           await new Promise((res, rej) => {
             media.onloadedmetadata = res;
             media.onerror = rej;
-            setTimeout(() => rej(), 12000);
+            setTimeout(() => rej(new Error('timeout')), 12000);
           });
         }
       } catch (e) {
-        console.warn('Media load issue');
+        console.warn('Media load issue:', e);
       }
-
-      if (!historyStack.includes(path)) {
-        historyStack.push(path);
-        if (historyStack.length > 25) historyStack.shift();
-      }
-
-      prevBtn.disabled = historyStack.length <= 1;
 
       media.style.opacity = '0';
-      setTimeout(() => { media.style.opacity = '1'; }, 30);
+      setTimeout(() => { media.style.opacity = '1'; }, 50);
 
       setTimeout(() => {
         statusEl.textContent = '';
         setLoading(false);
-      }, 800);
+      }, 650);
     }
 
     function getRandomMedia() {
@@ -381,7 +378,9 @@
       if (cached && cached.length) {
         allFiles = cached;
         setLoading(false);
-        showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
+        const first = allFiles[Math.floor(Math.random() * allFiles.length)];
+        historyStack = [];
+        showMedia(first, true);
         return;
       }
 
@@ -401,31 +400,32 @@
           )
           .map(item => item.path);
 
-        // Убрали пред-сортировку — теперь каждый клик = чистый рандом
         saveCache(allFiles);
       } catch (e) {
         console.error(e);
         allFiles = getCache() || [];
-        statusEl.textContent = allFiles.length ? 'CACHE USED' : 'ERROR';
+        statusEl.textContent = allFiles.length ? 'USING CACHE' : 'NETWORK ERROR';
       }
 
       setLoading(false);
       if (allFiles.length && !currentFile) {
-        showMedia(allFiles[Math.floor(Math.random() * allFiles.length)]);
+        const first = allFiles[Math.floor(Math.random() * allFiles.length)];
+        historyStack = [];
+        showMedia(first, true);
       }
     }
 
     nextBtn.addEventListener('click', () => {
       if (isLoading || !allFiles.length) return;
       const randomOne = getRandomMedia();
-      if (randomOne) showMedia(randomOne);
+      if (randomOne) showMedia(randomOne, true);
     });
 
     prevBtn.addEventListener('click', () => {
       if (isLoading || historyStack.length < 2) return;
       historyStack.pop();
-      const prev = historyStack[historyStack.length - 1];
-      if (prev) showMedia(prev);
+      const prevPath = historyStack[historyStack.length - 1];
+      if (prevPath) showMedia(prevPath, false);
     });
 
     downloadBtn.addEventListener('click', () => {
