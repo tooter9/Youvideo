@@ -11,7 +11,7 @@ interface CacheEntry {
 
 const MANIFEST_URL: string = "cats-manifest.json";
 const CACHE_KEY: string = "comg_manifest";
-const CACHE_TTL: number = 24 * 60 * 60 * 1000;
+const CACHE_TTL: number = 60 * 60 * 1000;
 
 class Gallery {
   private el: HTMLElement;
@@ -30,12 +30,25 @@ class Gallery {
     this.load();
   }
 
+  private getBaseUrl(): string {
+    const path = window.location.pathname;
+    const lastSlash = path.lastIndexOf("/");
+    if (lastSlash > 0) {
+      return path.substring(0, lastSlash + 1);
+    }
+    return "/";
+  }
+
   private getCached(): Manifest | null {
     try {
       const raw = localStorage.getItem(CACHE_KEY);
       if (!raw) return null;
       const entry: CacheEntry = JSON.parse(raw);
       if (Date.now() - entry.ts > CACHE_TTL) {
+        localStorage.removeItem(CACHE_KEY);
+        return null;
+      }
+      if (!entry.data.images || entry.data.images.length === 0) {
         localStorage.removeItem(CACHE_KEY);
         return null;
       }
@@ -51,18 +64,32 @@ class Gallery {
     } catch {}
   }
 
-  private async fetchManifest(): Promise<Manifest> {
-    const cached = this.getCached();
-    if (cached) {
-      this.setStatus("Loaded from cache");
-      return cached;
+  private clearCache(): void {
+    try {
+      localStorage.removeItem(CACHE_KEY);
+    } catch {}
+  }
+
+  private async fetchManifest(skipCache: boolean = false): Promise<Manifest> {
+    if (!skipCache) {
+      const cached = this.getCached();
+      if (cached) {
+        this.setStatus("Loaded from cache");
+        return cached;
+      }
     }
 
+    this.clearCache();
+
     try {
-      const res = await fetch(`${MANIFEST_URL}?_=${Date.now()}`);
+      const baseUrl = this.getBaseUrl();
+      const res = await fetch(`${baseUrl}${MANIFEST_URL}?_=${Date.now()}`);
       if (!res.ok) throw new Error(String(res.status));
       const data: Manifest = await res.json();
-      this.cache(data);
+      if (data.images && data.images.length > 0) {
+        data.images = data.images.map(img => baseUrl + img);
+        this.cache(data);
+      }
       this.setStatus("Manifest loaded");
       return data;
     } catch {
@@ -71,14 +98,24 @@ class Gallery {
     }
   }
 
-  private async load(): Promise<void> {
+  private async load(skipCache: boolean = false): Promise<void> {
     this.setStatus("Loading...");
-    const manifest = await this.fetchManifest();
+    const manifest = await this.fetchManifest(skipCache);
     this.paths = manifest.images;
     this.renderBadges(manifest.folders);
     this.updateCount();
     this.render();
-    if (this.paths.length === 0) this.setStatus("No images - run build.js");
+    if (this.paths.length === 0) this.setStatus("No images - click Refresh");
+  }
+
+  private async forceRefresh(): Promise<void> {
+    this.clearCache();
+    this.el.innerHTML = "";
+    document.getElementById("emptyState")!.classList.remove("visible");
+    await this.load(true);
+    if (this.paths.length > 0) {
+      this.setStatus(`Refreshed - ${this.paths.length} images loaded`);
+    }
   }
 
   private setStatus(text: string): void {
@@ -239,8 +276,7 @@ class Gallery {
   }
 
   private tweet(path: string): void {
-    const base = window.location.origin + window.location.pathname.replace(/\/[^/]*$/, "/");
-    const full = base + path;
+    const full = window.location.origin + path;
     const text = encodeURIComponent("Check out this cat! #CatOhMyGod #Cats");
     const url = encodeURIComponent(full);
     window.open(`https://twitter.com/intent/tweet?text=${text}&url=${url}`, "_blank", "noopener");
@@ -290,6 +326,8 @@ class Gallery {
     });
     document.getElementById("scrollToggle")!.addEventListener("click", () => this.toggleScroll());
     document.getElementById("shuffleBtn")!.addEventListener("click", () => this.shuffle());
+    document.getElementById("refreshBtn")!.addEventListener("click", () => this.forceRefresh());
+    document.getElementById("emptyRefreshBtn")!.addEventListener("click", () => this.forceRefresh());
 
     this.el.addEventListener("pointerenter", () => { if (this.scrolling) this.stopScroll(); });
     this.el.addEventListener("pointerleave", () => { if (this.scrolling) this.startScroll(); });
